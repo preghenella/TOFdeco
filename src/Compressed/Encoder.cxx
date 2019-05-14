@@ -3,8 +3,6 @@
 #include <chrono>
 #include <boost/format.hpp>
 
-#define VERBOSE
-
 namespace tof {
 namespace data {
 namespace compressed {
@@ -87,13 +85,14 @@ namespace compressed {
 
       /** check if TRM is empty **/
       if (summary.TRMempty[itrm])
-        continue;
+	continue;
 
       unsigned char firstFilledFrame = 255;
       unsigned char lastFilledFrame = 0;
 
       /** loop over TRM chains **/
       for (int ichain = 0; ichain < 2; ++ichain) {
+
 	/** loop over TDCs **/
 	for (int itdc = 0; itdc < 15; ++itdc) {
 
