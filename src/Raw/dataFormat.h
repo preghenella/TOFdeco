@@ -181,6 +181,7 @@ namespace raw {
     DRMGlobalTrailer_t DRMGlobalTrailer;
     TRMGlobalHeader_t  TRMGlobalHeader[10];
     TRMGlobalTrailer_t TRMGlobalTrailer[10];
+    bool TRMempty[10];
     TRMChainHeader_t   TRMChainHeader[10][2];
     TRMChainTrailer_t  TRMChainTrailer[10][2];
     TDCUnpackedHit_t   TDCUnpackedHit[10][2][15][1024];

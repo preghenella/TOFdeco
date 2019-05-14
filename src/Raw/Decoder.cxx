@@ -80,6 +80,7 @@ namespace raw {
     for (int itrm = 0; itrm < 10; itrm++) {
       mSummary.TRMGlobalHeader[itrm]  = {0x0};
       mSummary.TRMGlobalTrailer[itrm] = {0x0};
+      mSummary.TRMempty[itrm] = true;
       for (int ichain = 0; ichain < 2; ichain++) {
 	mSummary.TRMChainHeader[itrm][ichain]  = {0x0};
 	mSummary.TRMChainTrailer[itrm][ichain] = {0x0};
@@ -189,7 +190,8 @@ namespace raw {
 
 	      /** TDC hit detected **/
 	      if (mUnion->Word.WordType & 0x8) {
-		int itdc = mUnion->TDCUnpackedHit.TDCID;
+                mSummary.TRMempty[itrm] = false;
+                int itdc = mUnion->TDCUnpackedHit.TDCID;
 		int ihit = mSummary.nTDCUnpackedHits[itrm][ichain][itdc];
 		mSummary.TDCUnpackedHit[itrm][ichain][itdc][ihit] = mUnion->TDCUnpackedHit;
 		mSummary.nTDCUnpackedHits[itrm][ichain][itdc]++;
@@ -241,7 +243,8 @@ namespace raw {
 
 	      /** TDC hit detected **/
 	      if (mUnion->Word.WordType & 0x8) {
-		int itdc = mUnion->TDCUnpackedHit.TDCID;
+                mSummary.TRMempty[itrm] = false;
+                int itdc = mUnion->TDCUnpackedHit.TDCID;
 		int ihit = mSummary.nTDCUnpackedHits[itrm][ichain][itdc];
 		mSummary.TDCUnpackedHit[itrm][ichain][itdc][ihit] = mUnion->TDCUnpackedHit;
 		mSummary.nTDCUnpackedHits[itrm][ichain][itdc]++;
