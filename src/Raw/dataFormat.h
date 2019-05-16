@@ -140,14 +140,14 @@ namespace raw {
   
   struct TDCUnpackedHit_t
   {
-    uint32_t HitTime:  21; // leading or trailing edge measurement
-    uint32_t Chan:      3; // TDC channel number
-    uint32_t TDCID:     4; // TDC ID
-    uint32_t EBit:      1; // E bit
-    uint32_t PSBits:    2; // PS bits
-    uint32_t MBO:       1; // must-be-one bit
+    uint32_t HitTime : 21; // leading or trailing edge measurement
+    uint32_t Chan    :  3; // TDC channel number
+    uint32_t TDCID   :  4; // TDC ID
+    uint32_t EBit    :  1; // E bit
+    uint32_t PSBits  :  2; // PS bits
+    uint32_t MBO     :  1; // must-be-one bit
   };
-  
+
   /** union **/
 
   union Union_t
@@ -169,6 +169,15 @@ namespace raw {
   };
   
   /** summary data **/
+
+  struct TRMSpiderHit_t {
+    uint32_t HitTime  : 21; // leading or trailing edge measurement
+    uint32_t Chan     :  3; // TDC channel number
+    uint32_t TDCID    :  4; // TDC ID
+    uint32_t Chain    :  1; // chain
+    uint32_t EBit     :  1; // E bit
+    uint32_t TOTWidth : 21; // TOT width
+  };
   
   struct Summary_t
   {
@@ -181,11 +190,14 @@ namespace raw {
     DRMGlobalTrailer_t DRMGlobalTrailer;
     TRMGlobalHeader_t  TRMGlobalHeader[10];
     TRMGlobalTrailer_t TRMGlobalTrailer[10];
-    bool TRMempty[10];
     TRMChainHeader_t   TRMChainHeader[10][2];
     TRMChainTrailer_t  TRMChainTrailer[10][2];
     TDCUnpackedHit_t   TDCUnpackedHit[10][2][15][256];
     unsigned char      nTDCUnpackedHits[10][2][15];
+    // derived data
+    bool TRMempty[10];
+    TRMSpiderHit_t     TRMSpiderHit[10][1024];
+    unsigned char      nTRMSpiderHits[10];
   };
 
       

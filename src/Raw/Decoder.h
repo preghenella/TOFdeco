@@ -34,6 +34,7 @@ namespace raw {
   protected:
 
     void clear();
+    void spider();
     void print(std::string what);
 
     std::ifstream mFile;
