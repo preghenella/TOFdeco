@@ -18,6 +18,8 @@ namespace compressed {
     ~Decoder() {};
     
     bool open(std::string name);
+    bool load(std::string name);
+    bool next();
     bool decode();
     bool close();
     void setVerbose(bool val) {mVerbose = val;};
@@ -28,13 +30,14 @@ namespace compressed {
     
   protected:
 
-    bool next();
     void print(std::string what);
 
     std::ifstream mFile;
+    char *mBuffer;
+    long mSize;
+
     bool mVerbose;
-    uint32_t mWordType;
-    Union_t   mUnion;
+    Union_t *mUnion;
 
     
   };

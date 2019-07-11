@@ -25,6 +25,11 @@ namespace compressed {
     uint32_t MustBeOne    :  1;
   };
 
+  struct CrateOrbit_t
+  {
+    uint32_t OrbitID      : 32;
+  };
+  
   struct FrameHeader_t
   {
     uint32_t NumberOfHits : 16;
@@ -66,6 +71,7 @@ namespace compressed {
     uint32_t       Data;
     Word_t         Word;
     CrateHeader_t  CrateHeader;
+    CrateOrbit_t   CrateOrbit;
     FrameHeader_t  FrameHeader;
     PackedHit_t    PackedHit;
     CrateTrailer_t CrateTrailer;

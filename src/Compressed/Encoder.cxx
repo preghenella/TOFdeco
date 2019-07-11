@@ -77,6 +77,19 @@ namespace compressed {
 #endif
     mUnion++; nWords++;
     
+    // crate orbit
+    mUnion->CrateOrbit = {0x0};
+#ifdef VERBOSE
+    if (mVerbose) {
+      auto OrbitID = mUnion->CrateOrbit.OrbitID;
+      std::cout << boost::format("%08x") % mUnion->Data
+      		<< " "
+		<< boost::format("Crate orbit (OrbitID=%d)") % BunchID
+		<< std::endl;
+    }
+#endif
+    mUnion++; nWords++;
+    
     /** loop over TRMs **/
 
     unsigned char nPackedHits[256] = {0};
