@@ -203,8 +203,15 @@ namespace raw {
     mSkip = 4;
 
     clear();
-    boost::format fmt;
-
+    
+    /** DRM Common Header not detected **/
+    if (mUnion->Word.WordType != 4) {
+#ifdef VERBOSE
+      print("[ERROR] fatal error");
+#endif
+      return true;
+    }
+      
     mSummary.DRMCommonHeader = mUnion->DRMCommonHeader;
 #ifdef VERBOSE
     uint32_t Payload = mUnion->DRMCommonHeader.Payload;
