@@ -3,8 +3,6 @@
 #include <chrono>
 #include <boost/format.hpp>
 
-#define VERBOSE
-
 namespace tof {
 namespace data {
 namespace raw {
