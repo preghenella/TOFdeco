@@ -24,9 +24,75 @@ namespace raw {
     uint32_t UNDEFINED  : 24;
     uint32_t WordType   :  4;
   };
+
+  /** RDH **/
+
+  struct RDHWord_t {
+    uint32_t Data[4];
+  };
   
+  struct RDHWord0_t {
+    uint32_t HeaderVersion   :  8;
+    uint32_t HeaderSize      :  8;
+    uint32_t BlockLength     : 16;
+    uint32_t FeeID           : 16;
+    uint32_t PriorityBit     :  8;
+    uint32_t RESERVED        :  8;
+    uint32_t OffsetNewPacket : 16;
+    uint32_t MemorySize      : 16;
+    uint32_t UnkID           :  8;
+    uint32_t PacketCounter   :  8;
+    uint32_t CruID           : 12;
+    uint32_t DataPathWrapper :  4;
+  };
+
+  struct RDHWord1_t {
+    uint32_t TrgOrbit        : 32;
+    uint32_t HbOrbit         : 32;
+    uint32_t RESERVED1       : 32;
+    uint32_t RESERVED2       : 32;
+  };
+  
+  struct RDHWord2_t {
+    uint32_t TrgBC        : 12;
+    uint32_t RESERVED1    :  4;
+    uint32_t HbBC         : 12;
+    uint32_t RESERVED2    :  4;
+    uint32_t TrgType      : 32;
+    uint32_t RESERVED3    : 32;
+    uint32_t RESERVED4    : 32;
+  };
+
+  struct RDHWord3_t {
+    uint32_t DetectorField : 16;
+    uint32_t Par           : 16;
+    uint32_t StopBit       :  8;
+    uint32_t PagesCounter  : 16;
+    uint32_t RESERVED1     : 32;
+    uint32_t RESERVED2     : 32;
+    uint32_t RESERVED3     :  8;
+  };
+
+  union RDH_t
+  {
+    uint32_t    Data[4];
+    RDHWord0_t  Word0;
+    RDHWord1_t  Word1;
+    RDHWord2_t  Word2;
+    RDHWord3_t  Word3;
+  };
+
   /** DRM data **/
   
+  struct DRMCommonHeader_t {
+    uint32_t Payload   : 28;
+    uint32_t WordType  :  4;
+  };
+  
+  struct DRMOrbitHeader_t {
+    uint32_t Orbit     : 32;
+  };
+
   struct DRMGlobalHeader_t
   {
     uint32_t SlotID     :  4;
@@ -74,6 +140,11 @@ namespace raw {
     uint32_t MBZ2        :  1;
     uint32_t UNDEFINED   :  8;
     uint32_t WordType    :  4;
+  };
+  
+  struct DRMStatusHeader5_t
+  {
+    uint32_t UNKNOWN    : 32;
   };
   
   struct DRMGlobalTrailer_t
@@ -154,11 +225,14 @@ namespace raw {
   {
     uint32_t           Data;
     Word_t             Word;
+    DRMCommonHeader_t  DRMCommonHeader;
+    DRMOrbitHeader_t   DRMOrbitHeader;
     DRMGlobalHeader_t  DRMGlobalHeader;
     DRMStatusHeader1_t DRMStatusHeader1;
     DRMStatusHeader2_t DRMStatusHeader2;
     DRMStatusHeader3_t DRMStatusHeader3;
     DRMStatusHeader4_t DRMStatusHeader4;
+    DRMStatusHeader5_t DRMStatusHeader5;
     DRMGlobalTrailer_t DRMGlobalTrailer;
     TRMGlobalHeader_t  TRMGlobalHeader;
     TRMGlobalTrailer_t TRMGlobalTrailer;
@@ -181,12 +255,14 @@ namespace raw {
   
   struct Summary_t
   {
+    DRMCommonHeader_t  DRMCommonHeader;
+    DRMOrbitHeader_t   DRMOrbitHeader;
     DRMGlobalHeader_t  DRMGlobalHeader;
     DRMStatusHeader1_t DRMStatusHeader1;
     DRMStatusHeader2_t DRMStatusHeader2;
     DRMStatusHeader3_t DRMStatusHeader3;
     DRMStatusHeader4_t DRMStatusHeader4;
-    //      DRMStatusHeader5_t DRMStatusHeader5;
+    DRMStatusHeader5_t DRMStatusHeader5;
     DRMGlobalTrailer_t DRMGlobalTrailer;
     TRMGlobalHeader_t  TRMGlobalHeader[10];
     TRMGlobalTrailer_t TRMGlobalTrailer[10];
