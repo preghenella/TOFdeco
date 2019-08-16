@@ -155,23 +155,35 @@ namespace raw {
     uint32_t PacketCounter = mRDH->Word0.PacketCounter;
     uint32_t HeaderSize = mRDH->Word0.HeaderSize;
     boost::format fmt = boost::format("RDH Word0 (HeaderSize=%d, PacketCounter=%d)") % HeaderSize % PacketCounter;
-    printRDH(fmt.str());
+#ifdef VERBOSE
+    if (mVerbose)
+      printRDH(fmt.str());
+#endif
     next128();
 
     uint32_t TrgOrbit = mRDH->Word1.TrgOrbit;
     uint32_t HbOrbit = mRDH->Word1.HbOrbit;
     fmt = boost::format("RDH Word1 (TrgOrbit=%d, HbOrbit=%d)") % TrgOrbit % HbOrbit;
-    printRDH(fmt.str());
+#ifdef VERBOSE
+    if (mVerbose)
+      printRDH(fmt.str());
+#endif
     next128();
 
     uint32_t TrgBC = mRDH->Word2.TrgBC;
     uint32_t HbBC = mRDH->Word2.HbBC;
     uint32_t TrgType = mRDH->Word2.TrgType;
     fmt = boost::format("RDH Word2 (TrgBC=%d, HbBC=%d, TrgType=%d)") % TrgBC % HbBC % TrgType;
-    printRDH(fmt.str());
+#ifdef VERBOSE
+    if (mVerbose)
+      printRDH(fmt.str());
+#endif
     next128();
 
-    printRDH("RDH Word3");
+#ifdef VERBOSE
+    if (mVerbose)
+      printRDH("RDH Word3");
+#endif
     next128();
 
     return false;
