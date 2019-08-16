@@ -127,7 +127,14 @@ namespace compressed {
       mUnion++; nWords++;
       /** loop over frame payload **/
       for (int ihit = 0; ihit < NumberOfHits; ihit++) {
-	print("Packed hit");
+#ifdef VERBOSE
+	auto Chain = mUnion->PackedHit.Chain;
+	auto TDCID = mUnion->PackedHit.TDCID;
+	auto Channel = mUnion->PackedHit.Channel;
+	auto Time = mUnion->PackedHit.Time;
+	auto TOT = mUnion->PackedHit.TOT;
+	print(str(boost::format("Packed hit (Chain=%d, TDCID=%d, Channel=%d, Time=%d, TOT=%d)") % Chain % TDCID % Channel % Time % TOT));
+#endif
 	mUnion++; nWords++;
       }
       
