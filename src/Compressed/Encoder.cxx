@@ -216,7 +216,7 @@ namespace compressed {
     auto finish = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = finish - start;
 
-    mIntegratedBytes += mByteCounter * 4;
+    mIntegratedBytes += mByteCounter;
     mIntegratedTime += elapsed.count();
     
 #ifdef VERBOSE
