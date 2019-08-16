@@ -19,7 +19,7 @@ namespace compressed {
     ~Encoder() {};
     
     bool open(std::string name);
-    bool alloc(long size);
+    bool init();
     bool encode(const tof::data::raw::Summary_t &summary);
     bool flush();
     bool close();
@@ -31,13 +31,18 @@ namespace compressed {
     
   protected:
 
+    inline void next32();
+
     std::ofstream mFile;
     bool mVerbose;
 
     char *mBuffer;
-    long mSize;
+    long mSize = 8192;
+    char *mPointer = nullptr;
+
     Union_t *mUnion;
-    
+
+    uint32_t mByteCounter = 0;
   };
   
 }}}

@@ -14,17 +14,20 @@ namespace raw {
 
   public:
     
-  Decoder() : mVerbose(false), mSkip(0) {};
+    Decoder() {};
     ~Decoder() {};
-    
+
+    bool init();
     bool open(std::string name);
     bool load(std::string name);
-    bool next();
+    bool read();
+    bool decodeRDH();
     bool decode();
     bool close();
 
     void setVerbose(bool val) {mVerbose = val;};
     void setSkip(int val) {mSkip = val;};
+    void setSize(long val) {mSize = val;};
     const Summary_t &getSummary() const {return mSummary;};
 
     // benchmarks
@@ -36,17 +39,25 @@ namespace raw {
     void clear();
     void spider();
     void print(std::string what);
+    void printRDH(std::string what);
 
+    inline void next128();
+    inline void next32();
+    
     std::ifstream mFile;
-    char *mBuffer;
-    long mSize;
+    char *mBuffer = nullptr;
+    long mSize = 8192;
+    char *mPointer = nullptr;
 
-    bool mVerbose;
-    uint32_t mSkip;
+    bool mVerbose = false;
+    uint32_t mSkip = 4;
     uint32_t mSlotID;
     uint32_t mWordType;
+    RDH_t *mRDH;
     Union_t *mUnion;
     Summary_t mSummary;    
+
+    uint32_t mByteCounter = 0;
     
   };
   

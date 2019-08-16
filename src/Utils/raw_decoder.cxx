@@ -69,18 +69,22 @@ int main(int argc, char **argv)
     return 1;
   }
   
-  std::ifstream is;
-  is.open(inFileName.c_str(), std::fstream::binary);
-  if (!is.is_open()) {
-    std::cerr << "cannot open " << inFileName << std::endl;
-    return 1;
-  }
-
   Decoder decoder;
   decoder.setVerbose(verbose);
-  decoder.load(inFileName);
-  while (!decoder.next()) decoder.decode();
+  decoder.init();
+  decoder.open(inFileName);
+
+  while (!decoder.read()) {
+    decoder.decodeRDH();
+    for (int i = 0; i < 3; ++i)
+      if (decoder.decode()) break;
+    decoder.read();
+    decoder.decodeRDH();
+  }
+
   decoder.close();
+  
+  return 0;
 
   std::cout << " benchmark: decoded " << 1.e-6 * decoder.mIntegratedBytes << " MB in " << decoder.mIntegratedTime << " s"
 	    << " | " << 1.e-6 * decoder.mIntegratedBytes / decoder.mIntegratedTime << " MB/s"

@@ -3,6 +3,8 @@
 #include <chrono>
 #include <boost/format.hpp>
 
+#define VERBOSE
+
 namespace tof {
 namespace data {
 namespace compressed {
@@ -25,7 +27,15 @@ namespace compressed {
   bool
   Encoder::flush()
   {
-    mFile.write(mBuffer, mIntegratedBytes);
+#ifdef VERBOSE
+    if (mVerbose)
+      std::cout << "-------- FLUSH ENCODER BUFFER --------------------------------------"
+		<< " | " << mByteCounter << " bytes"
+		<< std::endl;
+#endif
+    mFile.write(mBuffer, mByteCounter);
+    mPointer = mBuffer;
+    mByteCounter = 0;
     return false;
   }
   
@@ -38,14 +48,32 @@ namespace compressed {
   }
   
   bool
-  Encoder::alloc(long size)
+  Encoder::init()
   {
-    mSize = size;
+#ifdef VERBOSE
+    if (mVerbose)
+      std::cout << "-------- INITIALISE ENCODER BUFFER ---------------------------------"
+		<< " | " << mSize << " bytes"
+		<< std::endl;
+#endif
+    if (mBuffer) {
+      std::cout << "Warning: a buffer was already allocated, cleaning" << std::endl;
+      delete [] mBuffer;
+    }
     mBuffer = new char[mSize];
-    mUnion = reinterpret_cast<Union_t *>(mBuffer);
+    mPointer = mBuffer;
+    mByteCounter = 0;
     return false;
   }
   
+  void
+  Encoder::next32()
+  {
+    mPointer += 4;
+    mByteCounter += 4;
+    mUnion = reinterpret_cast<Union_t *>(mPointer);
+  }
+
   bool
   Encoder::encode(const tof::data::raw::Summary_t &summary)
   {
@@ -56,7 +84,7 @@ namespace compressed {
 #endif
     auto start = std::chrono::high_resolution_clock::now();	
     
-    unsigned int nWords = 0;
+    mUnion = reinterpret_cast<Union_t *>(mPointer);
 
     // crate header
     mUnion->CrateHeader = {0x0};
@@ -75,20 +103,21 @@ namespace compressed {
 		<< std::endl;
     }
 #endif
-    mUnion++; nWords++;
+    next32();
     
     // crate orbit
     mUnion->CrateOrbit = {0x0};
+    mUnion->CrateOrbit.OrbitID = summary.DRMOrbitHeader.Orbit;
 #ifdef VERBOSE
     if (mVerbose) {
       auto OrbitID = mUnion->CrateOrbit.OrbitID;
       std::cout << boost::format("%08x") % mUnion->Data
       		<< " "
-		<< boost::format("Crate orbit (OrbitID=%d)") % BunchID
+		<< boost::format("Crate orbit (OrbitID=%d)") % OrbitID
 		<< std::endl;
     }
 #endif
-    mUnion++; nWords++;
+    next32();
     
     /** loop over TRMs **/
 
@@ -147,7 +176,7 @@ namespace compressed {
 		    << std::endl;
 	}
 #endif
-	mUnion++; nWords++;
+	next32();
 	
 	// packed hits
         for (int ihit = 0; ihit < nPackedHits[iframe]; ++ihit) {
@@ -166,7 +195,7 @@ namespace compressed {
                       << std::endl;
           }
 #endif
-	  mUnion++; nWords++;
+	  next32();
         }
 
         nPackedHits[iframe] = 0;
@@ -184,18 +213,18 @@ namespace compressed {
 		<< std::endl;
     }
 #endif
-    mUnion++; nWords++;
+    next32();
 
     auto finish = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = finish - start;
 
-    mIntegratedBytes += nWords * 4;
+    mIntegratedBytes += mByteCounter * 4;
     mIntegratedTime += elapsed.count();
     
 #ifdef VERBOSE
     if (mVerbose)
       std::cout << "-------- END ENCODE EVENT ------------------------------------------"
-		<< " " << nWords << " words"
+		<< " | " << mByteCounter << " bytes"
 		<< " | " << 1.e3  * elapsed.count() << " ms"
 		<< " | " << 1.e-6 * mIntegratedBytes / mIntegratedTime << " MB/s (average)"
 		<< std::endl;

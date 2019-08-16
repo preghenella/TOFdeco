@@ -3,10 +3,29 @@
 #include <chrono>
 #include <boost/format.hpp>
 
+#define VERBOSE
+
 namespace tof {
 namespace data {
 namespace raw {
 
+  bool
+  Decoder::init()
+  {
+#ifdef VERBOSE
+    if (mVerbose)
+      std::cout << "-------- INITIALISE DECODER BUFFER ---------------------------------"
+		<< " | " << mSize << " bytes"
+		<< std::endl;
+#endif
+    if (mBuffer) {
+      std::cout << "Warning: a buffer was already allocated, cleaning" << std::endl;
+      delete [] mBuffer;
+    }
+    mBuffer = new char[mSize];
+    return false;
+  }
+  
   bool
   Decoder::open(std::string name)
   {
@@ -45,6 +64,29 @@ namespace raw {
     close();
     return false;
   }
+
+  bool
+  Decoder::read()
+  {
+    if (!mFile.is_open()) {
+      std::cout << "Warning: no file is open" << std::endl;      
+      return true;
+    }
+    mFile.read(mBuffer, mSize);
+    mPointer = mBuffer;
+    if (!mFile) {
+      std::cout << "Nothing else to read" << std::endl;
+      return true; 
+    }
+#ifdef VERBOSE
+    if (mVerbose)
+      std::cout << "-------- READ CRU PAGE ---------------------------------------------"
+		<< " | " << mSize << " bytes"
+		<< std::endl;
+#endif
+    
+    return false;
+  }
   
   void
   Decoder::print(std::string what)
@@ -53,29 +95,17 @@ namespace raw {
       std::cout << boost::format("%08x") % mUnion->Data << " " << what << std::endl;
   }
   
-  bool
-  Decoder::next()
-  {
-    /** search for DRM Global header **/
-    while (true) {
-      if (((char *)mUnion - mBuffer) >= mSize)
-	return true;
-      if (mUnion->Word.WordType == 4 && mUnion->Word.SlotID == 1)
-	break;
-      mUnion++;
-    }
-    return false;
-  }
-
   void
   Decoder::clear()
   {
+    mSummary.DRMCommonHeader  = {0x0};
+    mSummary.DRMOrbitHeader   = {0x0};
     mSummary.DRMGlobalHeader  = {0x0};
     mSummary.DRMStatusHeader1 = {0x0};
     mSummary.DRMStatusHeader2 = {0x0};
     mSummary.DRMStatusHeader3 = {0x0};
     mSummary.DRMStatusHeader4 = {0x0};
-    //    mSummary.DRMStatusHeader5 = {0x0};
+    mSummary.DRMStatusHeader5 = {0x0};
     mSummary.DRMGlobalTrailer  = {0x0};
     for (int itrm = 0; itrm < 10; itrm++) {
       mSummary.TRMGlobalHeader[itrm]  = {0x0};
@@ -89,6 +119,63 @@ namespace raw {
 	  mSummary.nTDCUnpackedHits[itrm][ichain][itdc] = 0;
 	}}}
   }
+
+  void
+  Decoder::next32()
+  {
+    mPointer += mSkip;
+    mByteCounter += 4;
+    mSkip = (mSkip + 8) % 16;
+    mUnion = reinterpret_cast<Union_t *>(mPointer);
+  }
+
+  void
+  Decoder::next128()
+  {
+    mPointer += 16;
+    mRDH = reinterpret_cast<RDH_t *>(mPointer);
+  }
+  
+  void
+  Decoder::printRDH(std::string what)
+  {
+    if (mVerbose) {
+      for (int i = 3; i >= 0; --i)
+	std::cout << boost::format("%08x") % mRDH->Data[i];
+      std::cout << " " << what << std::endl;
+    }
+  }
+  
+  bool
+  Decoder::decodeRDH()
+  {
+    mRDH = reinterpret_cast<RDH_t *>(mPointer);
+
+    uint32_t BlockLength = mRDH->Word0.BlockLength;
+    uint32_t PacketCounter = mRDH->Word0.PacketCounter;
+    uint32_t HeaderSize = mRDH->Word0.HeaderSize;
+    boost::format fmt = boost::format("RDH Word0 (HeaderSize=%d, PacketCounter=%d)") % HeaderSize % PacketCounter;
+    printRDH(fmt.str());
+    next128();
+
+    uint32_t TrgOrbit = mRDH->Word1.TrgOrbit;
+    uint32_t HbOrbit = mRDH->Word1.HbOrbit;
+    fmt = boost::format("RDH Word1 (TrgOrbit=%d, HbOrbit=%d)") % TrgOrbit % HbOrbit;
+    printRDH(fmt.str());
+    next128();
+
+    uint32_t TrgBC = mRDH->Word2.TrgBC;
+    uint32_t HbBC = mRDH->Word2.HbBC;
+    uint32_t TrgType = mRDH->Word2.TrgType;
+    fmt = boost::format("RDH Word2 (TrgBC=%d, HbBC=%d, TrgType=%d)") % TrgBC % HbBC % TrgType;
+    printRDH(fmt.str());
+    next128();
+
+    printRDH("RDH Word3");
+    next128();
+
+    return false;
+  }
   
   bool
   Decoder::decode()
@@ -99,39 +186,59 @@ namespace raw {
 #endif
     auto start = std::chrono::high_resolution_clock::now();
     
+    mUnion = reinterpret_cast<Union_t *>(mPointer);
+    mByteCounter = 0;
+    mSkip = 4;
+
     clear();
-    unsigned int nWords = 1;
-    
+    boost::format fmt;
+
+    mSummary.DRMCommonHeader = mUnion->DRMCommonHeader;
+#ifdef VERBOSE
+    uint32_t Payload = mUnion->DRMCommonHeader.Payload;
+    fmt = boost::format("DRM Common Header (Payload=%d)") % Payload;
+    print(fmt.str());
+#endif
+    next32();
+    mSummary.DRMOrbitHeader = mUnion->DRMOrbitHeader;
+#ifdef VERBOSE
+    uint32_t Orbit = mUnion->DRMOrbitHeader.Orbit;
+    fmt = boost::format("DRM Orbit Header (Orbit=%d)") % Orbit;
+    print(fmt.str());
+#endif
+    next32();    
     mSummary.DRMGlobalHeader = mUnion->DRMGlobalHeader;
 #ifdef VERBOSE
-    print("DRM Global Header");
+    uint32_t DRMID = mUnion->DRMGlobalHeader.DRMID;
+    fmt = boost::format("DRM Global Header (DRMID=%d)") % DRMID;
+    print(fmt.str());
 #endif
-    mUnion++; nWords++;
+    next32();
     mSummary.DRMStatusHeader1 = mUnion->DRMStatusHeader1;
 #ifdef VERBOSE
     print("DRM Status Header 1");
 #endif
-    mUnion++; nWords++;
+    next32();
     mSummary.DRMStatusHeader2 = mUnion->DRMStatusHeader2;
 #ifdef VERBOSE
     print("DRM Status Header 2");
 #endif
-    mUnion++; nWords++;
+    next32();
     mSummary.DRMStatusHeader3 = mUnion->DRMStatusHeader3;
 #ifdef VERBOSE
     print("DRM Status Header 3");
 #endif
-    mUnion++; nWords++;
+    next32();
     mSummary.DRMStatusHeader4 = mUnion->DRMStatusHeader4;
 #ifdef VERBOSE
     print("DRM Status Header 4");
 #endif
-    mUnion++; nWords++;
-    //    mSummary.DRMStatusHeader5 = mUnion->DRMStatusHeader5;
+    next32();
+    mSummary.DRMStatusHeader5 = mUnion->DRMStatusHeader5;
 #ifdef VERBOSE
     print("DRM Status Header 5");
 #endif
-    mUnion++; nWords++;
+    next32();
 
     /** loop over DRM payload **/
     while (true) {
@@ -142,24 +249,24 @@ namespace raw {
 #ifdef VERBOSE
 	print("LTM Global Header");
 #endif
-	mUnion++; nWords++;
+	next32();
 
 	/** loop over LTM payload **/
 	while (true) {
 
-	  /** TRM global trailer detected **/
+	  /** LTM global trailer detected **/
 	  if (mUnion->Word.WordType == 5 && mUnion->Word.SlotID == 2) {
 #ifdef VERBOSE
 	    print("LTM Global Trailer");
 #endif
-	    mUnion++; nWords++;
+	    next32();
 	    break;
 	  }
 
 #ifdef VERBOSE
 	  print("LTM data");
 #endif
-	  mUnion++; nWords++;
+	  next32();
 	}
 	
       }
@@ -172,7 +279,7 @@ namespace raw {
 #ifdef VERBOSE
 	print("TRM Global Header");
 #endif
-	mUnion++; nWords++;
+	next32();
 	
 	/** loop over TRM payload **/
 	while (true) {
@@ -184,7 +291,7 @@ namespace raw {
 #ifdef VERBOSE
 	    print("TRM Chain-A Header");
 #endif
-	    mUnion++; nWords++;
+	    next32();
 
 	    /** loop over TRM chain-A payload **/
 	    while (true) {
@@ -199,7 +306,7 @@ namespace raw {
 #ifdef VERBOSE
 		print("TDC hit");
 #endif
-		mUnion++; nWords++;
+		next32();
 		continue;
 	      }
 	      
@@ -208,7 +315,7 @@ namespace raw {
 #ifdef VERBOSE
 		print("TDC error");
 #endif
-		mUnion++; nWords++;
+		next32();
 		continue;
 	      }
 
@@ -218,14 +325,14 @@ namespace raw {
 #ifdef VERBOSE
 		print("TRM Chain-A Trailer");
 #endif
-		mUnion++; nWords++;
+		next32();
 		break;
 	      }
 		
 #ifdef VERBOSE
 	      print("[ERROR] breaking TRM Chain-A decode stream");
 #endif
-	      mUnion++; nWords++;
+	      next32();
 	      break;
 	      
 	    }} /** end of loop over TRM chain-A payload **/	    
@@ -237,7 +344,7 @@ namespace raw {
 #ifdef VERBOSE
 	    print("TRM Chain-B Header");
 #endif
-	    mUnion++; nWords++;
+	    next32();
 
 	    /** loop over TRM chain-B payload **/
 	    while (true) {
@@ -252,7 +359,7 @@ namespace raw {
 #ifdef VERBOSE
 		print("TDC hit");
 #endif
-		mUnion++; nWords++;
+		next32();
 		continue;
 	      }
 	      
@@ -261,7 +368,7 @@ namespace raw {
 #ifdef VERBOSE
 		print("TDC error");
 #endif
-		mUnion++; nWords++;
+		next32();
 		continue;
 	      }
 
@@ -271,32 +378,32 @@ namespace raw {
 #ifdef VERBOSE
 		print("TRM Chain-B Trailer");
 #endif
-		mUnion++; nWords++;
+		next32();
 		break;
 	      }
 		
 #ifdef VERBOSE
 	      print("[ERROR] breaking TRM Chain-B decode stream");
 #endif
-	      mUnion++; nWords++;
+	      next32();
 	      break;
 	      
 	    }} /** end of loop over TRM chain-A payload **/	    
 	  
 	  /** TRM global trailer detected **/
-	  if (mUnion->Word.WordType == 5 && mUnion->Word.SlotID == 0xf) {
+	  if (mUnion->Word.WordType == 5 && (mUnion->Word.SlotID & 0x3) == 0x3) {
 	    mSummary.TRMGlobalTrailer[itrm] = mUnion->TRMGlobalTrailer;
 #ifdef VERBOSE
 	    print("TRM Global Trailer");
 #endif
-	    mUnion++; nWords++;
+	    next32();
 	    
-	    /** filler detected **/
+ 	    /** filler detected **/
 	    if (mUnion->Word.WordType == 7) {
 #ifdef VERBOSE
 	      print("Filler");
 #endif
-	      mUnion++; nWords++;
+	      next32();
 	    }
 	    
 	    break;
@@ -305,7 +412,7 @@ namespace raw {
 #ifdef VERBOSE
 	  print("[ERROR] breaking TRM decode stream");
 #endif
-	  mUnion++; nWords++;
+	  next32();
 	  break;
 	  
 	} /** end of loop over TRM payload **/
@@ -319,32 +426,45 @@ namespace raw {
 #ifdef VERBOSE
 	print("DRM Global Trailer");
 #endif
+	next32();
+
+	/** filler detected **/
+	if (mUnion->Word.WordType == 7) {
+#ifdef VERBOSE
+	  print("Filler");
+#endif
+	  next32();
+	}
+
 	break;
       }
-      
+
 #ifdef VERBOSE
       print("[ERROR] trying to recover DRM decode stream");
+      return true; // R+HACK
 #endif
-      mUnion++; nWords++;
+      next32();
       
     } /** end of loop over DRM payload **/
 
+    /** run SPIDER **/
+    spider();
+    
     auto finish = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = finish - start;
 
-    mIntegratedBytes += nWords * 4;
+    mIntegratedBytes += mByteCounter;
     mIntegratedTime += elapsed.count();
     
 #ifdef VERBOSE
     if (mVerbose)
       std::cout << "-------- END DECODE EVENT ------------------------------------------"
-		<< " | " << nWords << " words"
+		<< " | " << mByteCounter << " bytes"
 		<< " | " << 1.e3  * elapsed.count() << " ms"
 		<< " | " << 1.e-6 * mIntegratedBytes / mIntegratedTime << " MB/s (average)"
 		<< std::endl;
 #endif
 
-    spider();
     return false;
   }
 

@@ -47,19 +47,25 @@ int main(int argc, char **argv)
   
   tof::data::raw::Decoder decoder;
   decoder.setVerbose(verbose);
-  if (decoder.load(inFileName)) return 1;
+  decoder.init();
+  if (decoder.open(inFileName)) return 1;
   
   tof::data::compressed::Encoder encoder;
   encoder.setVerbose(verbose);
+  encoder.init();
   if (encoder.open(outFileName)) return 1;
-  encoder.alloc(10000000);
   
-  while (!decoder.next()) {
-    decoder.decode();
-    encoder.encode(decoder.getSummary());
+  while (!decoder.read()) {
+    decoder.decodeRDH();
+    for (int i = 0; i < 3; ++i) {
+      if (decoder.decode()) break;
+      encoder.encode(decoder.getSummary());
+    }
+    decoder.read();
+    decoder.decodeRDH();
+    encoder.flush();
   }
-  
-  encoder.flush();
+
   encoder.close();
   decoder.close();
 
