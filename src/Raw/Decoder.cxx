@@ -454,13 +454,12 @@ namespace raw {
 #endif
 	  next32();
 	}
-
+	
 	break;
       }
 
 #ifdef VERBOSE
       print("[ERROR] trying to recover DRM decode stream");
-      return true; // R+HACK
 #endif
       next32();
       
