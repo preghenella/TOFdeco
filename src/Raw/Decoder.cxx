@@ -151,30 +151,31 @@ namespace raw {
   {
     mRDH = reinterpret_cast<RDH_t *>(mPointer);
 
+#ifdef VERBOSE
     uint32_t BlockLength = mRDH->Word0.BlockLength;
     uint32_t PacketCounter = mRDH->Word0.PacketCounter;
     uint32_t HeaderSize = mRDH->Word0.HeaderSize;
-    boost::format fmt = boost::format("RDH Word0 (HeaderSize=%d, PacketCounter=%d)") % HeaderSize % PacketCounter;
-#ifdef VERBOSE
+    uint32_t MemorySize = mRDH->Word0.MemorySize;
+    boost::format fmt = boost::format("RDH Word0 (MemorySize=%d, PacketCounter=%d)") % MemorySize % PacketCounter;
     if (mVerbose)
       printRDH(fmt.str());
 #endif
     next128();
 
+#ifdef VERBOSE
     uint32_t TrgOrbit = mRDH->Word1.TrgOrbit;
     uint32_t HbOrbit = mRDH->Word1.HbOrbit;
     fmt = boost::format("RDH Word1 (TrgOrbit=%d, HbOrbit=%d)") % TrgOrbit % HbOrbit;
-#ifdef VERBOSE
     if (mVerbose)
       printRDH(fmt.str());
 #endif
     next128();
 
+#ifdef VERBOSE
     uint32_t TrgBC = mRDH->Word2.TrgBC;
     uint32_t HbBC = mRDH->Word2.HbBC;
     uint32_t TrgType = mRDH->Word2.TrgType;
     fmt = boost::format("RDH Word2 (TrgBC=%d, HbBC=%d, TrgType=%d)") % TrgBC % HbBC % TrgType;
-#ifdef VERBOSE
     if (mVerbose)
       printRDH(fmt.str());
 #endif
@@ -193,9 +194,11 @@ namespace raw {
   Decoder::decode()
   {
 #ifdef VERBOSE
+    boost::format fmt;
     if (mVerbose)
       std::cout << "-------- START DECODE EVENT ----------------------------------------" << std::endl;    
 #endif
+
     auto start = std::chrono::high_resolution_clock::now();
     
     mUnion = reinterpret_cast<Union_t *>(mPointer);
@@ -443,10 +446,12 @@ namespace raw {
       if (mUnion->Word.WordType == 5 && mUnion->Word.SlotID == 1) {
 	mSummary.DRMGlobalTrailer = mUnion->DRMGlobalTrailer;
 #ifdef VERBOSE
-	print("DRM Global Trailer");
+	uint32_t LocalEventCounter = mUnion->DRMGlobalTrailer.LocalEventCounter;
+	fmt = boost::format("DRM Global Trailer (LocalEventCounter=%d)") % LocalEventCounter;
+	print(fmt.str());
 #endif
 	next32();
-
+	
 	/** filler detected **/
 	if (mUnion->Word.WordType == 7) {
 #ifdef VERBOSE
