@@ -97,7 +97,7 @@ namespace compressed {
       auto DRMID = mUnion->CrateHeader.DRMID;
       std::cout << boost::format("%08x") % mUnion->Data
       		<< " "
-		<< boost::format("Crate header (DRMID=%d, EventCounter=%d, BunchID=%d)") % DRMID % EventCounter % BunchID
+		<< boost::format("Crate header          (DRMID=%d, EventCounter=%d, BunchID=%d)") % DRMID % EventCounter % BunchID
 		<< std::endl;
     }
 #endif
@@ -111,7 +111,7 @@ namespace compressed {
       auto OrbitID = mUnion->CrateOrbit.OrbitID;
       std::cout << boost::format("%08x") % mUnion->Data
       		<< " "
-		<< boost::format("Crate orbit (OrbitID=%d)") % OrbitID
+		<< boost::format("Crate orbit           (OrbitID=%d)") % OrbitID
 		<< std::endl;
     }
 #endif
@@ -170,7 +170,7 @@ namespace compressed {
 	  auto TRMID = mUnion->FrameHeader.TRMID;
 	  std::cout << boost::format("%08x") % mUnion->Data
 		    << " "
-		    << boost::format("Frame header (TRMID=%d, FrameID=%d, NumberOfHits=%d)") % TRMID % FrameID % NumberOfHits
+		    << boost::format("Frame header          (TRMID=%d, FrameID=%d, NumberOfHits=%d)") % TRMID % FrameID % NumberOfHits
 		    << std::endl;
 	}
 #endif
@@ -187,9 +187,7 @@ namespace compressed {
             auto Time = mUnion->PackedHit.Time;
             auto TOT = mUnion->PackedHit.TOT;
             std::cout << boost::format("%08x") % mUnion->Data << " "
-                      << boost::format("Packed hit (Chain=%d, TDCID=%d, "
-                                       "Channel=%d, Time=%d, TOT=%d)") %
-                             Chain % TDCID % Channel % Time % TOT
+                      << boost::format("Packed hit            (Chain=%d, TDCID=%d, Channel=%d, Time=%d, TOT=%d)") % Chain % TDCID % Channel % Time % TOT
                       << std::endl;
           }
 #endif
@@ -203,11 +201,33 @@ namespace compressed {
     // crate trailer
     mUnion->CrateTrailer = {0x0};
     mUnion->CrateTrailer.MustBeOne = 1;
+    mUnion->CrateTrailer.CrateFault = summary.DRMFaultFlag ? 1 : 0;
+    mUnion->CrateTrailer.TRMFault03 = summary.TRMFaultFlag[0] << 2 | summary.TRMChainFaultFlag[0][0] << 1 | summary.TRMChainFaultFlag[0][1];
+    mUnion->CrateTrailer.TRMFault04 = summary.TRMFaultFlag[1] << 2 | summary.TRMChainFaultFlag[1][0] << 1 | summary.TRMChainFaultFlag[1][1];
+    mUnion->CrateTrailer.TRMFault05 = summary.TRMFaultFlag[2] << 2 | summary.TRMChainFaultFlag[2][0] << 1 | summary.TRMChainFaultFlag[2][1];
+    mUnion->CrateTrailer.TRMFault06 = summary.TRMFaultFlag[3] << 2 | summary.TRMChainFaultFlag[3][0] << 1 | summary.TRMChainFaultFlag[3][1];
+    mUnion->CrateTrailer.TRMFault07 = summary.TRMFaultFlag[4] << 2 | summary.TRMChainFaultFlag[4][0] << 1 | summary.TRMChainFaultFlag[4][1];
+    mUnion->CrateTrailer.TRMFault08 = summary.TRMFaultFlag[5] << 2 | summary.TRMChainFaultFlag[5][0] << 1 | summary.TRMChainFaultFlag[5][1];
+    mUnion->CrateTrailer.TRMFault09 = summary.TRMFaultFlag[6] << 2 | summary.TRMChainFaultFlag[6][0] << 1 | summary.TRMChainFaultFlag[6][1];
+    mUnion->CrateTrailer.TRMFault10 = summary.TRMFaultFlag[7] << 2 | summary.TRMChainFaultFlag[7][0] << 1 | summary.TRMChainFaultFlag[7][1];
+    mUnion->CrateTrailer.TRMFault11 = summary.TRMFaultFlag[8] << 2 | summary.TRMChainFaultFlag[8][0] << 1 | summary.TRMChainFaultFlag[8][1];
+    mUnion->CrateTrailer.TRMFault12 = summary.TRMFaultFlag[9] << 2 | summary.TRMChainFaultFlag[9][0] << 1 | summary.TRMChainFaultFlag[9][1];
 #ifdef VERBOSE
     if (mVerbose) {
+      auto CrateFault = mUnion->CrateTrailer.CrateFault;
+      auto TRMFault03 = mUnion->CrateTrailer.TRMFault03;
+      auto TRMFault04 = mUnion->CrateTrailer.TRMFault04;
+      auto TRMFault05 = mUnion->CrateTrailer.TRMFault05;
+      auto TRMFault06 = mUnion->CrateTrailer.TRMFault06;
+      auto TRMFault07 = mUnion->CrateTrailer.TRMFault07;
+      auto TRMFault08 = mUnion->CrateTrailer.TRMFault08;
+      auto TRMFault09 = mUnion->CrateTrailer.TRMFault09;
+      auto TRMFault10 = mUnion->CrateTrailer.TRMFault10;
+      auto TRMFault11 = mUnion->CrateTrailer.TRMFault11;
+      auto TRMFault12 = mUnion->CrateTrailer.TRMFault12;
       std::cout << boost::format("%08x") % mUnion->Data
 		<< " "
-		<< "Crate trailer"
+		<< boost::format("Crate trailer         (CrateFault=%d TRMFault[3-12]=0x[%x,%x,%x,%x,%x,%x,%x,%x,%x,%x])") % CrateFault % TRMFault03 % TRMFault04 % TRMFault05 % TRMFault06 % TRMFault07 % TRMFault08 % TRMFault09 % TRMFault10 % TRMFault11 % TRMFault12
 		<< std::endl;
     }
 #endif
