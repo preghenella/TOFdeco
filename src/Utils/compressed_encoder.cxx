@@ -54,18 +54,36 @@ int main(int argc, char **argv)
   encoder.setVerbose(verbose);
   encoder.init();
   if (encoder.open(outFileName)) return 1;
-  
-  while (!decoder.read()) {
-    decoder.decodeRDH();
-    for (int i = 0; i < 3; ++i) {
-      if (decoder.decode()) break;
-      encoder.encode(decoder.getSummary());
-    }
-    decoder.read();
-    decoder.decodeRDH();
-    encoder.flush();
-  }
 
+  /** loop over pages **/
+  while (!decoder.read()) {
+    
+    /** decode RDH open **/
+    decoder.decodeRDH();
+    /** decode loop **/
+    while (!decoder.decode()) {
+
+      if (decoder.check()) {
+	decoder.rewind();
+	decoder.setVerbose(true);
+	decoder.decodeRDH();
+	while (!decoder.decode())
+	  if (decoder.check())
+	    getchar();
+	decoder.setVerbose(verbose);
+      }
+      
+      encoder.encode(decoder.getSummary());
+    } /** end of decode loop **/
+
+    /** read page **/
+    decoder.read();
+    /** decode RDH close **/
+    decoder.decodeRDH();
+    /** flush encoder **/
+    encoder.flush();
+  } /** end of loop over pages **/
+  
   encoder.close();
   decoder.close();
 
