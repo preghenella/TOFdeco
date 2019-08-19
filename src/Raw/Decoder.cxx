@@ -334,10 +334,9 @@ namespace raw {
 	mSummary.TRMGlobalHeader[itrm] = mUnion->TRMGlobalHeader;
 #ifdef VERBOSE
 	uint32_t EventWords = mUnion->TRMGlobalHeader.EventWords;
-	uint32_t ACQBits = mUnion->TRMGlobalHeader.ACQBits;
-	uint32_t LBit = mUnion->TRMGlobalHeader.LBit;
+	uint32_t EventNumber = mUnion->TRMGlobalHeader.EventNumber;
 	uint32_t EBit = mUnion->TRMGlobalHeader.EBit;
-	fmt = boost::format("TRM Global Header     (SlotID=%d, EventWords=%d, ACQBits=%d, LBit=%d, EBit=%01x)") % SlotID % EventWords % ACQBits % LBit % EBit;
+	fmt = boost::format("TRM Global Header     (SlotID=%d, EventWords=%d, EventNumber=%d, EBit=%01x)") % SlotID % EventWords % EventNumber % EBit;
 	print(fmt.str());
 #endif
 	next32();
@@ -474,8 +473,9 @@ namespace raw {
 	  if (mUnion->Word.WordType == 5 && (mUnion->Word.SlotID & 0x3) == 0x3) {
 	    mSummary.TRMGlobalTrailer[itrm] = mUnion->TRMGlobalTrailer;
 #ifdef VERBOSE
-	    uint32_t EventCounter = mUnion->TRMGlobalTrailer.EventCounter;
-	    fmt = boost::format("TRM Global Trailer    (SlotID=%d, EventCounter=%d)") % SlotID % EventCounter;
+	    uint32_t EventCRC = mUnion->TRMGlobalTrailer.EventCRC;
+	    uint32_t LBit = mUnion->TRMGlobalTrailer.LBit;
+	    fmt = boost::format("TRM Global Trailer    (SlotID=%d, EventCRC=%d, LBit=%d)") % SlotID % EventCRC % LBit;
 	    print(fmt.str());
 #endif
 	    next32();

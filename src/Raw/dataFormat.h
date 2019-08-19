@@ -168,21 +168,23 @@ namespace raw {
   
   struct TRMGlobalHeader_t
   {
-    uint32_t SlotID     :  4;
-    uint32_t EventWords : 13;
-    uint32_t ACQBits    :  2;
-    uint32_t LBit       :  1;
-    uint32_t EBit       :  1;
-    uint32_t MBZ        :  7;
-    uint32_t WordType   :  4;
+    uint32_t SlotID      :  4;
+    uint32_t EventWords  : 13;
+    uint32_t EventNumber : 10;
+    uint32_t EBit        :  1;
+    uint32_t WordType    :  4;
     inline uint32_t &raw() {return *reinterpret_cast<uint32_t *>(this);};
   };
   
   struct TRMGlobalTrailer_t
   {
     uint32_t MustBeThree  :  2;
-    uint32_t EventCRC     : 14;
-    uint32_t EventCounter : 12;
+    uint32_t EventCRC     : 12;
+    uint32_t Temp         :  8;
+    uint32_t SendAd       :  3;
+    uint32_t Chain        :  1;
+    uint32_t TSBit        :  1;
+    uint32_t LBit         :  1;
     uint32_t WordType     :  4;
     inline uint32_t &raw() {return *reinterpret_cast<uint32_t *>(this);};
   };
