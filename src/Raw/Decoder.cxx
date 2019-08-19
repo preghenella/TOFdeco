@@ -122,7 +122,7 @@ namespace raw {
 	}}}
   }
 
-  void
+  inline void
   Decoder::next32()
   {
     mPointer += mSkip;
@@ -132,7 +132,7 @@ namespace raw {
     mUnion = reinterpret_cast<Union_t *>(mPointer);
   }
 
-  void
+  inline void
   Decoder::next128()
   {
     mPointer += 16;
