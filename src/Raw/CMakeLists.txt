@@ -1,4 +1,4 @@
-set(SOURCES Decoder.cxx)
+set(SOURCES Decoder.cxx Checker.cxx)
 	
 add_library(TOFdataRaw SHARED ${SOURCES})
 target_link_libraries(TOFdataRaw)

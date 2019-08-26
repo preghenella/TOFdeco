@@ -31,6 +31,8 @@
 #define GET_DRM_LOCALEVENTCOUNTER(x)   ( (x & 0x0000FFF0) >>  4 )
 
 #define GET_TRM_SLOTID(x)              ( (x & 0x0000000F) )
+#define GET_TRM_EVENTNUMBER(x)         ( (x & 0x07FE0000) >> 17 )
+#define GET_TRM_EVENTWORDS(x)          ( (x & 0x0001FFF0) >>  4 )
 
 #define GET_TRMCHAIN_BUNCHID(x)        ( (x & 0x0000FFF0) >>  4 )
 #define GET_TRMCHAIN_EVENTCOUNTER(x)   ( (x & 0x0FFF0000) >> 16 )
@@ -261,15 +263,6 @@ namespace raw {
 
   /** summary data **/
 
-  struct TRMSpiderHit_t {
-    uint32_t HitTime  : 21; // leading or trailing edge measurement
-    uint32_t Chan     :  3; // TDC channel number
-    uint32_t TDCID    :  4; // TDC ID
-    uint32_t Chain    :  1; // chain
-    uint32_t EBit     :  1; // E bit
-    uint32_t TOTWidth : 21; // TOT width
-  };
-  
   struct Summary_t
   {
     RDHWord0_t         RDHWord0;
@@ -293,8 +286,6 @@ namespace raw {
     uint8_t  nTDCUnpackedHits[10][2][15];
     // derived data
     bool TRMempty[10];
-    TRMSpiderHit_t     TRMSpiderHit[10][1024];
-    unsigned char      nTRMSpiderHits[10];
     // status
     bool decodeError;
     uint32_t faultFlags;

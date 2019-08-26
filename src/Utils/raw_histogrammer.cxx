@@ -1,4 +1,4 @@
- #include <boost/program_options.hpp>
+#include <boost/program_options.hpp>
 #include <iostream>
 #include <fstream>
 #include <cstdint>
@@ -67,6 +67,9 @@ int main(int argc, char **argv)
 
   auto hRDH_MemorySize = new TH1F("hRDH_MemorySize", "", 8192, 0., 8192.); 
   auto hDRM_L0BCID = new TH1F("hDRM_L0BCID", "", N_ORBIT_BC, 0., N_ORBIT_BC);
+  auto hDRM_LocalEventCounter = new TH1F("hDRM_LocalEventCounter", "", 4096, 0., 4096.);
+  auto hTRM_EventNumber = new TH2F("hTRM_EventNumber", "", 10, 0., 10., 4096, 0., 4096.);
+  auto hTRM_EventWords = new TH2F("hTRM_EventWords", "", 10, 0., 10., 8192, 0., 8192.);
   auto hCrate_Channel = new TH1F("hCrate_Channel", "", 2400, 0., 2400.);
   auto hTDC_HitTime = new TH1F("hTDC_HitTime", "", 4096, 0., 2097152.);
   auto hTDC_HitTime_us = new TH1F("hTDC_HitTime_us", ";hit time (us)", 8192, 0., 2097152 * TDC_BIN_WIDTH);
@@ -91,16 +94,23 @@ int main(int argc, char **argv)
     while (!decoder.decode()) {
 
       auto summary = decoder.getSummary();
-      auto DRM_L0BCID = GET_DRM_L0BCID(summary.DRMStatusHeader3);
+      uint32_t DRM_L0BCID = GET_DRM_L0BCID(summary.DRMStatusHeader3);
+      uint32_t DRM_LocalEventCounter = GET_DRM_LOCALEVENTCOUNTER(summary.DRMGlobalTrailer);
       int windowStart = (DRM_L0BCID - latencyWindow) * 1024;
 
       hDRM_L0BCID->Fill(DRM_L0BCID);
+      hDRM_LocalEventCounter->Fill(DRM_LocalEventCounter);
+      
       if (!mapBC_Orbit_Time.count(DRM_L0BCID))
 	mapBC_Orbit_Time[DRM_L0BCID] = new TH1F(Form("hOrbit_Time_BC%d", DRM_L0BCID), "", 8192, 0., N_ORBIT_TDC_BINS);
       if (!mapBC_Orbit_Time_us.count(DRM_L0BCID))
 	mapBC_Orbit_Time_us[DRM_L0BCID] = new TH1F(Form("hOrbit_Time_us_BC%d", DRM_L0BCID), "", 8192, 0., N_ORBIT_BC * BC_WIDTH);
       
       for (int itrm = 0; itrm < 10; ++itrm) {
+
+	hTRM_EventNumber->Fill(itrm, GET_TRM_EVENTNUMBER(summary.TRMGlobalHeader[itrm]));
+	hTRM_EventWords->Fill(itrm, GET_TRM_EVENTWORDS(summary.TRMGlobalHeader[itrm]));
+	
 	for (int ichain = 0; ichain < 2; ++ichain) {
 	  for (int itdc = 0; itdc < 15; ++itdc) {
 	    for (int ihit = 0; ihit < summary.nTDCUnpackedHits[itrm][ichain][itdc]; ++ihit) {
@@ -144,6 +154,9 @@ int main(int argc, char **argv)
   auto fout = TFile::Open(outFileName.c_str(), "RECREATE");
   hRDH_MemorySize->Write();
   hDRM_L0BCID->Write();
+  hDRM_LocalEventCounter->Write();
+  hTRM_EventNumber->Write();
+  hTRM_EventWords->Write();
   hTDC_HitTime->Write();
   hTDC_HitTime_us->Write();
   hOrbit_Time->Write();

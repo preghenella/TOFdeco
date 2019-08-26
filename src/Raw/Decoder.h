@@ -23,14 +23,13 @@ namespace raw {
     bool read();
     bool decodeRDH();
     bool decode();
-    bool check();
-    void rewind() {mPointer = (uint32_t *)mBuffer;};
+    void rewind() {mPointer = (uint32_t *)mBuffer; mMemoryCounter = 0;};
     bool close();
 
     void setVerbose(bool val) {mVerbose = val;};
     void setSkip(int val) {mSkip = val;};
     void setSize(long val) {mSize = val;};
-    const Summary_t &getSummary() const {return mSummary;};
+    Summary_t &getSummary() {return mSummary;};
 
     // benchmarks
     double mIntegratedBytes = 0.;

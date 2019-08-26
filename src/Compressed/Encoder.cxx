@@ -26,10 +26,11 @@ namespace compressed {
   Encoder::flush()
   {
 #ifdef VERBOSE
-    if (mVerbose)
+    if (mVerbose) {
       std::cout << "-------- FLUSH ENCODER BUFFER --------------------------------------"
 		<< " | " << mByteCounter << " bytes"
 		<< std::endl;
+    }
 #endif
     mFile.write(mBuffer, mOutputByteCounter);
     mPointer = (uint32_t *)mBuffer;
@@ -49,10 +50,11 @@ namespace compressed {
   Encoder::init()
   {
 #ifdef VERBOSE
-    if (mVerbose)
+    if (mVerbose) {
       std::cout << "-------- INITIALISE ENCODER BUFFER ---------------------------------"
 		<< " | " << mSize << " bytes"
 		<< std::endl;
+    }
 #endif
     if (mBuffer) {
       std::cout << "Warning: a buffer was already allocated, cleaning" << std::endl;
@@ -76,8 +78,9 @@ namespace compressed {
   {
 
 #ifdef VERBOSE
-    if (mVerbose)
+    if (mVerbose) {
       std::cout << "-------- START ENCODE EVENT ----------------------------------------" << std::endl;
+    }
 #endif
     auto start = std::chrono::high_resolution_clock::now();	
 
@@ -259,12 +262,13 @@ namespace compressed {
     mIntegratedTime += elapsed.count();
     
 #ifdef VERBOSE
-    if (mVerbose)
+    if (mVerbose) {
       std::cout << "-------- END ENCODE EVENT ------------------------------------------"
 		<< " | " << mByteCounter << " bytes"
 		<< " | " << 1.e3  * elapsed.count() << " ms"
 		<< " | " << 1.e-6 * mIntegratedBytes / mIntegratedTime << " MB/s (average)"
 		<< std::endl;
+    }
 #endif
 
     return false;

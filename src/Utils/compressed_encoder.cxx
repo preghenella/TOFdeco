@@ -3,6 +3,7 @@
 #include <fstream>
 #include <cstdint>
 #include "Raw/Decoder.h"
+#include "Raw/Checker.h"
 #include "Compressed/Encoder.h"
 
 int main(int argc, char **argv)
@@ -49,6 +50,9 @@ int main(int argc, char **argv)
   decoder.setVerbose(verbose);
   decoder.init();
   if (decoder.open(inFileName)) return 1;
+
+  tof::data::raw::Checker checker;
+  checker.setVerbose(verbose);
   
   tof::data::compressed::Encoder encoder;
   encoder.setVerbose(verbose);
@@ -68,20 +72,24 @@ int main(int argc, char **argv)
     
     /** decode RDH open **/
     decoder.decodeRDH();
+    
     /** decode loop **/
     while (!decoder.decode()) {
-
-      if (decoder.check()) {
+      
+      /** check: if error rewind, print and pause **/
+      if (checker.check(decoder.getSummary())) {
 	decoder.rewind();
 	decoder.setVerbose(true);
 	decoder.decodeRDH();
 	while (!decoder.decode())
-	  if (decoder.check())
+	  if (checker.check(decoder.getSummary()))
 	    getchar();
 	decoder.setVerbose(verbose);
       }
       
+      /** encode **/
       encoder.encode(decoder.getSummary());
+
     } /** end of decode loop **/
 
     /** pause chrono for IO operation **/
@@ -113,6 +121,10 @@ int main(int argc, char **argv)
 
   std::cout << " decoder benchmark: " << decoder.mIntegratedBytes << " bytes in " << decoder.mIntegratedTime << " s"
 	    << " | " << 1.e-6 * decoder.mIntegratedBytes / decoder.mIntegratedTime << " MB/s"
+	    << std::endl;
+  
+  std::cout << " checker benchmark: " << decoder.mIntegratedBytes << " bytes in " << checker.mIntegratedTime << " s"
+	    << " | " << 1.e-6 * decoder.mIntegratedBytes / checker.mIntegratedTime << " MB/s"
 	    << std::endl;
   
   std::cout << " encoder benchmark: " << encoder.mIntegratedBytes << " bytes in " << encoder.mIntegratedTime << " s"
