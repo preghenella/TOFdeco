@@ -31,9 +31,9 @@ namespace compressed {
 		<< " | " << mByteCounter << " bytes"
 		<< std::endl;
 #endif
-    mFile.write(mBuffer, mByteCounter);
-    mPointer = mBuffer;
-    mByteCounter = 0;
+    mFile.write(mBuffer, mOutputByteCounter);
+    mPointer = (uint32_t *)mBuffer;
+    mOutputByteCounter = 0;
     return false;
   }
   
@@ -59,17 +59,19 @@ namespace compressed {
       delete [] mBuffer;
     }
     mBuffer = new char[mSize];
-    mPointer = mBuffer;
-    mByteCounter = 0;
+    mPointer = (uint32_t *)mBuffer;
+    mOutputByteCounter = 0;
     return false;
   }
   
   void
   Encoder::next32()
   {
-    mPointer += 4;
+    mPointer++;
     mByteCounter += 4;
+#ifdef VERBOSE
     mUnion = reinterpret_cast<Union_t *>(mPointer);
+#endif
   }
 
   bool
@@ -81,15 +83,15 @@ namespace compressed {
       std::cout << "-------- START ENCODE EVENT ----------------------------------------" << std::endl;
 #endif
     auto start = std::chrono::high_resolution_clock::now();	
-    
+
+    mByteCounter = 0;
     mUnion = reinterpret_cast<Union_t *>(mPointer);
 
     // crate header
-    mUnion->CrateHeader = {0x0};
-    mUnion->CrateHeader.MustBeOne = 1;
-    mUnion->CrateHeader.DRMID = summary.DRMGlobalHeader.DRMID;
-    mUnion->CrateHeader.EventCounter = summary.DRMGlobalTrailer.LocalEventCounter;
-    mUnion->CrateHeader.BunchID = summary.DRMStatusHeader3.L0BCID;
+    *mPointer  = 0x80000000;
+    *mPointer |= summary.DRMGlobalHeader.DRMID << 24;
+    *mPointer |= summary.DRMGlobalTrailer.LocalEventCounter << 12;
+    *mPointer |= summary.DRMStatusHeader3.L0BCID;
 #ifdef VERBOSE
     if (mVerbose) {
       auto BunchID = mUnion->CrateHeader.BunchID;
@@ -104,8 +106,7 @@ namespace compressed {
     next32();
     
     // crate orbit
-    mUnion->CrateOrbit = {0x0};
-    mUnion->CrateOrbit.OrbitID = summary.DRMOrbitHeader.Orbit;
+    *mPointer = summary.DRMOrbitHeader.Orbit;
 #ifdef VERBOSE
     if (mVerbose) {
       auto OrbitID = mUnion->CrateOrbit.OrbitID;
@@ -158,11 +159,10 @@ namespace compressed {
           continue;
 
         // frame header
-	mUnion->FrameHeader = {0x0};
-	mUnion->FrameHeader.MustBeZero = 0;
-	mUnion->FrameHeader.TRMID = itrm + 3;
-	mUnion->FrameHeader.FrameID = iframe;
-        mUnion->FrameHeader.NumberOfHits = nPackedHits[iframe];
+	*mPointer  = 0x00000000;
+	*mPointer |= (itrm + 3) << 24;
+	*mPointer |= iframe << 16;
+        *mPointer |= nPackedHits[iframe];
 #ifdef VERBOSE
 	if (mVerbose) {
 	  auto NumberOfHits = mUnion->FrameHeader.NumberOfHits;
@@ -178,7 +178,12 @@ namespace compressed {
 	
 	// packed hits
         for (int ihit = 0; ihit < nPackedHits[iframe]; ++ihit) {
-          mUnion->PackedHit = PackedHit[iframe][ihit];
+	  *mPointer  = 0x00000000;
+	  *mPointer |= PackedHit[iframe][ihit].TOT;
+	  *mPointer |= PackedHit[iframe][ihit].Time << 11;
+	  *mPointer |= PackedHit[iframe][ihit].Channel << 24;
+	  *mPointer |= PackedHit[iframe][ihit].TDCID << 27;
+	  *mPointer |= PackedHit[iframe][ihit].Chain << 31;
 #ifdef VERBOSE
 	  if (mVerbose) {
             auto Chain = mUnion->PackedHit.Chain;
@@ -199,19 +204,18 @@ namespace compressed {
     }
 
     // crate trailer
-    mUnion->CrateTrailer = {0x0};
-    mUnion->CrateTrailer.MustBeOne = 1;
-    mUnion->CrateTrailer.CrateFault = summary.DRMFaultFlag ? 1 : 0;
-    mUnion->CrateTrailer.TRMFault03 = summary.TRMFaultFlag[0] << 2 | summary.TRMChainFaultFlag[0][0] << 1 | summary.TRMChainFaultFlag[0][1];
-    mUnion->CrateTrailer.TRMFault04 = summary.TRMFaultFlag[1] << 2 | summary.TRMChainFaultFlag[1][0] << 1 | summary.TRMChainFaultFlag[1][1];
-    mUnion->CrateTrailer.TRMFault05 = summary.TRMFaultFlag[2] << 2 | summary.TRMChainFaultFlag[2][0] << 1 | summary.TRMChainFaultFlag[2][1];
-    mUnion->CrateTrailer.TRMFault06 = summary.TRMFaultFlag[3] << 2 | summary.TRMChainFaultFlag[3][0] << 1 | summary.TRMChainFaultFlag[3][1];
-    mUnion->CrateTrailer.TRMFault07 = summary.TRMFaultFlag[4] << 2 | summary.TRMChainFaultFlag[4][0] << 1 | summary.TRMChainFaultFlag[4][1];
-    mUnion->CrateTrailer.TRMFault08 = summary.TRMFaultFlag[5] << 2 | summary.TRMChainFaultFlag[5][0] << 1 | summary.TRMChainFaultFlag[5][1];
-    mUnion->CrateTrailer.TRMFault09 = summary.TRMFaultFlag[6] << 2 | summary.TRMChainFaultFlag[6][0] << 1 | summary.TRMChainFaultFlag[6][1];
-    mUnion->CrateTrailer.TRMFault10 = summary.TRMFaultFlag[7] << 2 | summary.TRMChainFaultFlag[7][0] << 1 | summary.TRMChainFaultFlag[7][1];
-    mUnion->CrateTrailer.TRMFault11 = summary.TRMFaultFlag[8] << 2 | summary.TRMChainFaultFlag[8][0] << 1 | summary.TRMChainFaultFlag[8][1];
-    mUnion->CrateTrailer.TRMFault12 = summary.TRMFaultFlag[9] << 2 | summary.TRMChainFaultFlag[9][0] << 1 | summary.TRMChainFaultFlag[9][1];
+    *mPointer  = 0x80000000;
+    *mPointer |= summary.DRMFaultFlag ? 1 : 0;
+    *mPointer |= (summary.TRMFaultFlag[0] << 2 | summary.TRMChainFaultFlag[0][0] << 1 | summary.TRMChainFaultFlag[0][1]) << 1;
+    *mPointer |= (summary.TRMFaultFlag[1] << 2 | summary.TRMChainFaultFlag[1][0] << 1 | summary.TRMChainFaultFlag[1][1]) << 4;
+    *mPointer |= (summary.TRMFaultFlag[2] << 2 | summary.TRMChainFaultFlag[2][0] << 1 | summary.TRMChainFaultFlag[2][1]) << 7;
+    *mPointer |= (summary.TRMFaultFlag[3] << 2 | summary.TRMChainFaultFlag[3][0] << 1 | summary.TRMChainFaultFlag[3][1]) << 10;
+    *mPointer |= (summary.TRMFaultFlag[4] << 2 | summary.TRMChainFaultFlag[4][0] << 1 | summary.TRMChainFaultFlag[4][1]) << 13;
+    *mPointer |= (summary.TRMFaultFlag[5] << 2 | summary.TRMChainFaultFlag[5][0] << 1 | summary.TRMChainFaultFlag[5][1]) << 16;
+    *mPointer |= (summary.TRMFaultFlag[6] << 2 | summary.TRMChainFaultFlag[6][0] << 1 | summary.TRMChainFaultFlag[6][1]) << 19;
+    *mPointer |= (summary.TRMFaultFlag[7] << 2 | summary.TRMChainFaultFlag[7][0] << 1 | summary.TRMChainFaultFlag[7][1]) << 22;
+    *mPointer |= (summary.TRMFaultFlag[8] << 2 | summary.TRMChainFaultFlag[8][0] << 1 | summary.TRMChainFaultFlag[8][1]) << 25;
+    *mPointer |= (summary.TRMFaultFlag[9] << 2 | summary.TRMChainFaultFlag[9][0] << 1 | summary.TRMChainFaultFlag[9][1]) << 28;
 #ifdef VERBOSE
     if (mVerbose) {
       auto CrateFault = mUnion->CrateTrailer.CrateFault;
@@ -236,6 +240,7 @@ namespace compressed {
     auto finish = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = finish - start;
 
+    mOutputByteCounter += mByteCounter;
     mIntegratedBytes += mByteCounter;
     mIntegratedTime += elapsed.count();
     
