@@ -55,14 +55,23 @@ int main(int argc, char **argv)
   encoder.init();
   if (encoder.open(outFileName)) return 1;
 
+  /** chrono **/
+  std::chrono::time_point<std::chrono::high_resolution_clock> start, finish;
+  std::chrono::duration<double> elapsed;
+  double integratedTime;
+ 
   /** loop over pages **/
   while (!decoder.read()) {
+
+    /** get start chrono **/
+    start = std::chrono::high_resolution_clock::now();	
     
     /** decode RDH open **/
     decoder.decodeRDH();
     /** decode loop **/
     while (!decoder.decode()) {
 
+#if 0
       if (decoder.check()) {
 	decoder.rewind();
 	decoder.setVerbose(true);
@@ -72,28 +81,47 @@ int main(int argc, char **argv)
 	    getchar();
 	decoder.setVerbose(verbose);
       }
+#endif
       
       encoder.encode(decoder.getSummary());
     } /** end of decode loop **/
 
+    /** pause chrono for IO operation **/
+    finish = std::chrono::high_resolution_clock::now();
+    elapsed = finish - start;
+    integratedTime += elapsed.count();
+    
     /** read page **/
     decoder.read();
+
+    /** restart chrono after IO operation **/
+    start = std::chrono::high_resolution_clock::now();
+    
     /** decode RDH close **/
     decoder.decodeRDH();
+    
+    /** get finish chrono and increment **/
+    finish = std::chrono::high_resolution_clock::now();
+    elapsed = finish - start;
+    integratedTime += elapsed.count();
+    
     /** flush encoder **/
     encoder.flush();
+
   } /** end of loop over pages **/
   
   encoder.close();
   decoder.close();
 
-  std::cout << " decoder benchmark: " << 1.e-6 * decoder.mIntegratedBytes << " MB in " << decoder.mIntegratedTime << " s"
+  std::cout << " decoder benchmark: " << decoder.mIntegratedBytes << " bytes in " << decoder.mIntegratedTime << " s"
 	    << " | " << 1.e-6 * decoder.mIntegratedBytes / decoder.mIntegratedTime << " MB/s"
 	    << std::endl;
-
-  std::cout << " encoder benchmark: " << 1.e-6 * encoder.mIntegratedBytes << " MB in " << encoder.mIntegratedTime << " s"
+  
+  std::cout << " encoder benchmark: " << encoder.mIntegratedBytes << " bytes in " << encoder.mIntegratedTime << " s"
 	    << " | " << 1.e-6 * encoder.mIntegratedBytes / encoder.mIntegratedTime << " MB/s"
 	    << std::endl;
+
+  std::cout << " local benchmark: " << integratedTime << " s" << std::endl;
   
   return 0;
 }
