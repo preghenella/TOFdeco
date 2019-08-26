@@ -532,20 +532,20 @@ namespace raw {
 	
 	break;
       }
-
+      
 #ifdef VERBOSE
       print("[ERROR] trying to recover DRM decode stream");
 #endif
       next32();
       
     } /** end of loop over DRM payload **/
-
+    
     /** run SPIDER **/
-    spider();
+    //    spider();
     
     auto finish = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = finish - start;
-
+    
     mIntegratedBytes += mByteCounter;
     mIntegratedTime += elapsed.count();
     
