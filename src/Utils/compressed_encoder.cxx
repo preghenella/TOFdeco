@@ -71,7 +71,6 @@ int main(int argc, char **argv)
     /** decode loop **/
     while (!decoder.decode()) {
 
-#if 0
       if (decoder.check()) {
 	decoder.rewind();
 	decoder.setVerbose(true);
@@ -81,7 +80,6 @@ int main(int argc, char **argv)
 	    getchar();
 	decoder.setVerbose(verbose);
       }
-#endif
       
       encoder.encode(decoder.getSummary());
     } /** end of decode loop **/
