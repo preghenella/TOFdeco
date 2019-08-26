@@ -69,9 +69,6 @@ namespace compressed {
   {
     mPointer++;
     mByteCounter += 4;
-#ifdef VERBOSE
-    mUnion = reinterpret_cast<Union_t *>(mPointer);
-#endif
   }
 
   bool
@@ -85,20 +82,19 @@ namespace compressed {
     auto start = std::chrono::high_resolution_clock::now();	
 
     mByteCounter = 0;
-    mUnion = reinterpret_cast<Union_t *>(mPointer);
 
     // crate header
     *mPointer  = 0x80000000;
-    *mPointer |= summary.DRMGlobalHeader.DRMID << 24;
-    *mPointer |= summary.DRMGlobalTrailer.LocalEventCounter << 12;
-    *mPointer |= summary.DRMStatusHeader3.L0BCID;
+    *mPointer |= GET_DRM_DRMID(summary.DRMGlobalHeader) << 24;
+    *mPointer |= GET_DRM_LOCALEVENTCOUNTER(summary.DRMGlobalTrailer) << 12;
+    *mPointer |= GET_DRM_L0BCID(summary.DRMStatusHeader3);
 #ifdef VERBOSE
     if (mVerbose) {
-      auto BunchID = mUnion->CrateHeader.BunchID;
-      auto EventCounter = mUnion->CrateHeader.EventCounter;
-      auto DRMID = mUnion->CrateHeader.DRMID;
-      std::cout << boost::format("%08x") % mUnion->Data
-      		<< " "
+      auto CrateHeader = reinterpret_cast<CrateHeader_t *>(mPointer);
+      auto BunchID = CrateHeader->BunchID;
+      auto EventCounter = CrateHeader->EventCounter;
+      auto DRMID = CrateHeader->DRMID;
+      std::cout << boost::format("%08x") % *mPointer << " "
 		<< boost::format("Crate header          (DRMID=%d, EventCounter=%d, BunchID=%d)") % DRMID % EventCounter % BunchID
 		<< std::endl;
     }
@@ -106,12 +102,12 @@ namespace compressed {
     next32();
     
     // crate orbit
-    *mPointer = summary.DRMOrbitHeader.Orbit;
+    *mPointer = summary.DRMOrbitHeader;
 #ifdef VERBOSE
     if (mVerbose) {
-      auto OrbitID = mUnion->CrateOrbit.OrbitID;
-      std::cout << boost::format("%08x") % mUnion->Data
-      		<< " "
+      auto CrateOrbit = reinterpret_cast<CrateOrbit_t *>(mPointer);
+      auto OrbitID = CrateOrbit->OrbitID;
+      std::cout << boost::format("%08x") % *mPointer << " "
 		<< boost::format("Crate orbit           (OrbitID=%d)") % OrbitID
 		<< std::endl;
     }
@@ -120,15 +116,15 @@ namespace compressed {
     
     /** loop over TRMs **/
 
-    unsigned char nPackedHits[256] = {0};
-    PackedHit_t PackedHit[256][256];
+    uint8_t  nPackedHits[256] = {0};
+    uint32_t PackedHit[256][256];
     for (int itrm = 0; itrm < 10; itrm++) {
 
       /** check if TRM is empty **/
       if (summary.TRMempty[itrm]) continue;
 
-      unsigned char firstFilledFrame = 255;
-      unsigned char lastFilledFrame = 0;
+      uint8_t firstFilledFrame = 255;
+      uint8_t lastFilledFrame = 0;
 
       /** SPIDER **/
       
@@ -146,27 +142,33 @@ namespace compressed {
           for (int ihit = 0; ihit < nhits; ++ihit) {
 
             auto lhit = summary.TDCUnpackedHit[itrm][ichain][itdc][ihit];
-            if (lhit.PSBits != 0x1)
+            if (GET_TDCHIT_PSBITS(lhit) != 0x1)
               continue; // must be a leading hit
-            auto tot = 0;
+
+	    auto Chan = GET_TDCHIT_CHAN(lhit);
+	    auto HitTime = GET_TDCHIT_HITTIME(lhit);
+	    auto EBit = GET_TDCHIT_EBIT(lhit);
+            uint32_t TOTWidth = 0;
 	    
             // check next hits for packing
             for (int jhit = ihit + 1; jhit < nhits; ++jhit) {
               auto thit = summary.TDCUnpackedHit[itrm][ichain][itdc][jhit];
-              if (thit.PSBits == 0x2 && thit.Chan == lhit.Chan) { // must be a trailing hit from same channel
-                tot = thit.HitTime - lhit.HitTime; // compute TOT
-                lhit.PSBits = 0x0;                 // mark as used
+              if (GET_TDCHIT_PSBITS(thit) == 0x2 && GET_TDCHIT_CHAN(thit) == Chan) { // must be a trailing hit from same channel
+                TOTWidth = GET_TDCHIT_HITTIME(thit) - HitTime; // compute TOT
+                lhit = 0x0; // mark as used
                 break;
               }
             }
 
-	    auto iframe = lhit.HitTime >> 13;
+	    auto iframe = HitTime >> 13;
 	    auto phit = nPackedHits[iframe];
-	    PackedHit[iframe][phit].Chain = ichain;
-	    PackedHit[iframe][phit].TDCID = itdc;
-	    PackedHit[iframe][phit].Channel = lhit.Chan;
-	    PackedHit[iframe][phit].Time = lhit.HitTime;
-	    PackedHit[iframe][phit].TOT = tot;
+
+	    PackedHit[iframe][phit]  = 0x00000000;
+	    PackedHit[iframe][phit] |= TOTWidth;
+	    PackedHit[iframe][phit] |= HitTime << 11;
+	    PackedHit[iframe][phit] |= Chan << 24;
+	    PackedHit[iframe][phit] |= itdc << 27;
+	    PackedHit[iframe][phit] |= ichain << 31;
 	    nPackedHits[iframe]++;
 	    
 	    if (iframe < firstFilledFrame)
@@ -179,8 +181,7 @@ namespace compressed {
       }
             
       /** loop over frames **/
-      for (int iframe = firstFilledFrame; iframe < lastFilledFrame + 1;
-           iframe++) {
+      for (int iframe = firstFilledFrame; iframe < lastFilledFrame + 1; iframe++) {
 
         /** check if frame is empty **/
         if (nPackedHits[iframe] == 0)
@@ -193,11 +194,11 @@ namespace compressed {
         *mPointer |= nPackedHits[iframe];
 #ifdef VERBOSE
 	if (mVerbose) {
-	  auto NumberOfHits = mUnion->FrameHeader.NumberOfHits;
-	  auto FrameID = mUnion->FrameHeader.FrameID;
-	  auto TRMID = mUnion->FrameHeader.TRMID;
-	  std::cout << boost::format("%08x") % mUnion->Data
-		    << " "
+	  auto FrameHeader = reinterpret_cast<FrameHeader_t *>(mPointer);
+	  auto NumberOfHits = FrameHeader->NumberOfHits;
+	  auto FrameID = FrameHeader->FrameID;
+	  auto TRMID = FrameHeader->TRMID;
+	  std::cout << boost::format("%08x") % *mPointer << " "
 		    << boost::format("Frame header          (TRMID=%d, FrameID=%d, NumberOfHits=%d)") % TRMID % FrameID % NumberOfHits
 		    << std::endl;
 	}
@@ -206,20 +207,16 @@ namespace compressed {
 	
 	// packed hits
         for (int ihit = 0; ihit < nPackedHits[iframe]; ++ihit) {
-	  *mPointer  = 0x00000000;
-	  *mPointer |= PackedHit[iframe][ihit].TOT;
-	  *mPointer |= PackedHit[iframe][ihit].Time << 11;
-	  *mPointer |= PackedHit[iframe][ihit].Channel << 24;
-	  *mPointer |= PackedHit[iframe][ihit].TDCID << 27;
-	  *mPointer |= PackedHit[iframe][ihit].Chain << 31;
+	  *mPointer = PackedHit[iframe][ihit];
 #ifdef VERBOSE
 	  if (mVerbose) {
-            auto Chain = mUnion->PackedHit.Chain;
-            auto TDCID = mUnion->PackedHit.TDCID;
-            auto Channel = mUnion->PackedHit.Channel;
-            auto Time = mUnion->PackedHit.Time;
-            auto TOT = mUnion->PackedHit.TOT;
-            std::cout << boost::format("%08x") % mUnion->Data << " "
+	    auto PackedHit = reinterpret_cast<PackedHit_t *>(mPointer);
+            auto Chain = PackedHit->Chain;
+            auto TDCID = PackedHit->TDCID;
+            auto Channel = PackedHit->Channel;
+            auto Time = PackedHit->Time;
+            auto TOT = PackedHit->TOT;
+            std::cout << boost::format("%08x") % *mPointer << " "
                       << boost::format("Packed hit            (Chain=%d, TDCID=%d, Channel=%d, Time=%d, TOT=%d)") % Chain % TDCID % Channel % Time % TOT
                       << std::endl;
           }
@@ -232,33 +229,22 @@ namespace compressed {
     }
 
     // crate trailer
-    *mPointer  = 0x80000000;
-    *mPointer |= summary.DRMFaultFlag ? 1 : 0;
-    *mPointer |= (summary.TRMFaultFlag[0] << 2 | summary.TRMChainFaultFlag[0][0] << 1 | summary.TRMChainFaultFlag[0][1]) << 1;
-    *mPointer |= (summary.TRMFaultFlag[1] << 2 | summary.TRMChainFaultFlag[1][0] << 1 | summary.TRMChainFaultFlag[1][1]) << 4;
-    *mPointer |= (summary.TRMFaultFlag[2] << 2 | summary.TRMChainFaultFlag[2][0] << 1 | summary.TRMChainFaultFlag[2][1]) << 7;
-    *mPointer |= (summary.TRMFaultFlag[3] << 2 | summary.TRMChainFaultFlag[3][0] << 1 | summary.TRMChainFaultFlag[3][1]) << 10;
-    *mPointer |= (summary.TRMFaultFlag[4] << 2 | summary.TRMChainFaultFlag[4][0] << 1 | summary.TRMChainFaultFlag[4][1]) << 13;
-    *mPointer |= (summary.TRMFaultFlag[5] << 2 | summary.TRMChainFaultFlag[5][0] << 1 | summary.TRMChainFaultFlag[5][1]) << 16;
-    *mPointer |= (summary.TRMFaultFlag[6] << 2 | summary.TRMChainFaultFlag[6][0] << 1 | summary.TRMChainFaultFlag[6][1]) << 19;
-    *mPointer |= (summary.TRMFaultFlag[7] << 2 | summary.TRMChainFaultFlag[7][0] << 1 | summary.TRMChainFaultFlag[7][1]) << 22;
-    *mPointer |= (summary.TRMFaultFlag[8] << 2 | summary.TRMChainFaultFlag[8][0] << 1 | summary.TRMChainFaultFlag[8][1]) << 25;
-    *mPointer |= (summary.TRMFaultFlag[9] << 2 | summary.TRMChainFaultFlag[9][0] << 1 | summary.TRMChainFaultFlag[9][1]) << 28;
+    *mPointer = 0x80000000 | summary.faultFlags;
 #ifdef VERBOSE
     if (mVerbose) {
-      auto CrateFault = mUnion->CrateTrailer.CrateFault;
-      auto TRMFault03 = mUnion->CrateTrailer.TRMFault03;
-      auto TRMFault04 = mUnion->CrateTrailer.TRMFault04;
-      auto TRMFault05 = mUnion->CrateTrailer.TRMFault05;
-      auto TRMFault06 = mUnion->CrateTrailer.TRMFault06;
-      auto TRMFault07 = mUnion->CrateTrailer.TRMFault07;
-      auto TRMFault08 = mUnion->CrateTrailer.TRMFault08;
-      auto TRMFault09 = mUnion->CrateTrailer.TRMFault09;
-      auto TRMFault10 = mUnion->CrateTrailer.TRMFault10;
-      auto TRMFault11 = mUnion->CrateTrailer.TRMFault11;
-      auto TRMFault12 = mUnion->CrateTrailer.TRMFault12;
-      std::cout << boost::format("%08x") % mUnion->Data
-		<< " "
+      auto CrateTrailer = reinterpret_cast<CrateTrailer_t *>(mPointer);
+      auto CrateFault = CrateTrailer->CrateFault;
+      auto TRMFault03 = CrateTrailer->TRMFault03;
+      auto TRMFault04 = CrateTrailer->TRMFault04;
+      auto TRMFault05 = CrateTrailer->TRMFault05;
+      auto TRMFault06 = CrateTrailer->TRMFault06;
+      auto TRMFault07 = CrateTrailer->TRMFault07;
+      auto TRMFault08 = CrateTrailer->TRMFault08;
+      auto TRMFault09 = CrateTrailer->TRMFault09;
+      auto TRMFault10 = CrateTrailer->TRMFault10;
+      auto TRMFault11 = CrateTrailer->TRMFault11;
+      auto TRMFault12 = CrateTrailer->TRMFault12;
+      std::cout << boost::format("%08x") % *mPointer << " "
 		<< boost::format("Crate trailer         (CrateFault=%d TRMFault[3-12]=0x[%x,%x,%x,%x,%x,%x,%x,%x,%x,%x])") % CrateFault % TRMFault03 % TRMFault04 % TRMFault05 % TRMFault06 % TRMFault07 % TRMFault08 % TRMFault09 % TRMFault10 % TRMFault11 % TRMFault12
 		<< std::endl;
     }

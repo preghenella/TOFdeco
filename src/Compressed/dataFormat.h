@@ -77,7 +77,7 @@ namespace compressed {
     CrateTrailer_t CrateTrailer;
   };
 
-  /** summary **/
+ /** summary **/
   struct Summary_t
   {
     CrateHeader_t  CrateHeader;

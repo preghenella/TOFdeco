@@ -91,7 +91,7 @@ int main(int argc, char **argv)
     while (!decoder.decode()) {
 
       auto summary = decoder.getSummary();
-      auto DRM_L0BCID = summary.DRMStatusHeader3.L0BCID;
+      auto DRM_L0BCID = GET_DRM_L0BCID(summary.DRMStatusHeader3);
       int windowStart = (DRM_L0BCID - latencyWindow) * 1024;
 
       hDRM_L0BCID->Fill(DRM_L0BCID);
@@ -104,11 +104,11 @@ int main(int argc, char **argv)
 	for (int ichain = 0; ichain < 2; ++ichain) {
 	  for (int itdc = 0; itdc < 15; ++itdc) {
 	    for (int ihit = 0; ihit < summary.nTDCUnpackedHits[itrm][ichain][itdc]; ++ihit) {
-	      auto PSBits = summary.TDCUnpackedHit[itrm][ichain][itdc][ihit].PSBits;
+	      auto PSBits = GET_TDCHIT_PSBITS(summary.TDCUnpackedHit[itrm][ichain][itdc][ihit]);
 	      if (PSBits != 0x1) continue;
-	      auto TDC_HitTime = summary.TDCUnpackedHit[itrm][ichain][itdc][ihit].HitTime;
-	      auto TDCID = summary.TDCUnpackedHit[itrm][ichain][itdc][ihit].TDCID;
-	      auto Chan = summary.TDCUnpackedHit[itrm][ichain][itdc][ihit].Chan;
+	      auto TDC_HitTime = GET_TDCHIT_HITTIME(summary.TDCUnpackedHit[itrm][ichain][itdc][ihit]);
+	      auto TDCID = GET_TDCHIT_TDCID(summary.TDCUnpackedHit[itrm][ichain][itdc][ihit]);
+	      auto Chan = GET_TDCHIT_CHAN(summary.TDCUnpackedHit[itrm][ichain][itdc][ihit]);
 	      auto index = Chan + 8 * TDCID + 120 * ichain + 240 * itrm;
 	      hTRM_TDCID->Fill(itrm, itdc + 15 * ichain);
 	      hCrate_Channel->Fill(index);

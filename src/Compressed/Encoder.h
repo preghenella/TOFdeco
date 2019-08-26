@@ -40,8 +40,6 @@ namespace compressed {
     long mSize = 8192;
     uint32_t *mPointer = nullptr;
 
-    Union_t *mUnion;
-
     uint32_t mOutputByteCounter = 0;
     uint32_t mByteCounter = 0;
   };

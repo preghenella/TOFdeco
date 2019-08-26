@@ -56,7 +56,6 @@ namespace raw {
     uint32_t mSlotID;
     uint32_t mWordType;
     RDH_t *mRDH;
-    Union_t *mUnion;
     Summary_t mSummary;    
 
     uint32_t mPageCounter = 0;

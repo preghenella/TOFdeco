@@ -57,7 +57,6 @@ namespace raw {
     mSize = mFile.tellg();
     mFile.seekg(0);
     mBuffer = new char[mSize];
-    mUnion = reinterpret_cast<Union_t *>(mBuffer);
     mFile.read(mBuffer, mSize);
     close();
     return false;
@@ -91,32 +90,30 @@ namespace raw {
   Decoder::print(std::string what)
   {
     if (mVerbose)
-      std::cout << boost::format("%08x") % mUnion->Data << " " << what << std::endl;
+      std::cout << boost::format("%08x") % *mPointer << " " << what << std::endl;
   }
   
   void
   Decoder::clear()
   {
-    mSummary.DRMCommonHeader  = {0x0};
-    mSummary.DRMOrbitHeader   = {0x0};
-    mSummary.DRMGlobalHeader  = {0x0};
-    mSummary.DRMStatusHeader1 = {0x0};
-    mSummary.DRMStatusHeader2 = {0x0};
-    mSummary.DRMStatusHeader3 = {0x0};
-    mSummary.DRMStatusHeader4 = {0x0};
-    mSummary.DRMStatusHeader5 = {0x0};
-    mSummary.DRMGlobalTrailer  = {0x0};
-    mSummary.DRMFaultFlag = false;
+    mSummary.DRMCommonHeader  = 0x0;
+    mSummary.DRMOrbitHeader   = 0x0;
+    mSummary.DRMGlobalHeader  = 0x0;
+    mSummary.DRMStatusHeader1 = 0x0;
+    mSummary.DRMStatusHeader2 = 0x0;
+    mSummary.DRMStatusHeader3 = 0x0;
+    mSummary.DRMStatusHeader4 = 0x0;
+    mSummary.DRMStatusHeader5 = 0x0;
+    mSummary.DRMGlobalTrailer = 0x0;
+    mSummary.faultFlags = 0x0;
     for (int itrm = 0; itrm < 10; itrm++) {
-      mSummary.TRMGlobalHeader[itrm]  = {0x0};
-      mSummary.TRMGlobalTrailer[itrm] = {0x0};
+      mSummary.TRMGlobalHeader[itrm]  = 0x0;
+      mSummary.TRMGlobalTrailer[itrm] = 0x0;
       mSummary.TRMempty[itrm] = true;
-      mSummary.TRMFaultFlag[itrm] = false;
       mSummary.nTRMSpiderHits[itrm] = 0;
       for (int ichain = 0; ichain < 2; ichain++) {
-	mSummary.TRMChainHeader[itrm][ichain]  = {0x0};
-	mSummary.TRMChainTrailer[itrm][ichain] = {0x0};
-	mSummary.TRMChainFaultFlag[itrm][ichain] = false;
+	mSummary.TRMChainHeader[itrm][ichain]  = 0x0;
+	mSummary.TRMChainTrailer[itrm][ichain] = 0x0;
 	for (int itdc = 0; itdc < 15; itdc++) {
 	  mSummary.nTDCUnpackedHits[itrm][ichain][itdc] = 0;
 	}}}
@@ -129,7 +126,6 @@ namespace raw {
     mMemoryCounter += mSkip * 4;
     mByteCounter += 4;
     mSkip = (mSkip + 2) % 4;
-    mUnion = reinterpret_cast<Union_t *>(mPointer);
   }
 
   inline void
@@ -224,7 +220,6 @@ namespace raw {
 #endif
 
     auto start = std::chrono::high_resolution_clock::now();
-    mUnion = reinterpret_cast<Union_t *>(mPointer);
     mByteCounter = 0;
     mSkip = 1;
 
@@ -239,16 +234,18 @@ namespace raw {
       return true;
     }
       
-    mSummary.DRMCommonHeader = mUnion->DRMCommonHeader;
+    mSummary.DRMCommonHeader = *mPointer;
 #ifdef VERBOSE
-    uint32_t Payload = mUnion->DRMCommonHeader.Payload;
+    auto DRMCommonHeader = reinterpret_cast<DRMCommonHeader_t *>(mPointer);
+    auto Payload = DRMCommonHeader->Payload;
     fmt = boost::format("DRM Common Header     (Payload=%d)") % Payload;
     print(fmt.str());
 #endif
     next32();
-    mSummary.DRMOrbitHeader = mUnion->DRMOrbitHeader;
+    mSummary.DRMOrbitHeader = *mPointer;
 #ifdef VERBOSE
-    uint32_t Orbit = mUnion->DRMOrbitHeader.Orbit;
+    auto DRMOrbitHeader = reinterpret_cast<DRMOrbitHeader_t *>(mPointer);
+    auto Orbit = DRMOrbitHeader->Orbit;
     fmt = boost::format("DRM Orbit Header      (Orbit=%d)") % Orbit;
     print(fmt.str());
 #endif
@@ -262,45 +259,49 @@ namespace raw {
       return true;
     }
 
-    mSummary.DRMGlobalHeader = mUnion->DRMGlobalHeader;
+    mSummary.DRMGlobalHeader = *mPointer;
 #ifdef VERBOSE
-    uint32_t DRMID = mUnion->DRMGlobalHeader.DRMID;
+    auto DRMGlobalHeader = reinterpret_cast<DRMGlobalHeader_t *>(mPointer);
+    auto DRMID = DRMGlobalHeader->DRMID;
     fmt = boost::format("DRM Global Header     (DRMID=%d)") % DRMID;
     print(fmt.str());
 #endif
     next32();
-    mSummary.DRMStatusHeader1 = mUnion->DRMStatusHeader1;
+    mSummary.DRMStatusHeader1 = *mPointer;
 #ifdef VERBOSE
-    uint32_t ParticipatingSlotID = mUnion->DRMStatusHeader1.ParticipatingSlotID;
-    uint32_t CBit = mUnion->DRMStatusHeader1.CBit;
-    uint32_t DRMhSize = mUnion->DRMStatusHeader1.DRMhSize;
+    auto DRMStatusHeader1 = reinterpret_cast<DRMStatusHeader1_t *>(mPointer);
+    auto ParticipatingSlotID = DRMStatusHeader1->ParticipatingSlotID;
+    auto CBit = DRMStatusHeader1->CBit;
+    auto DRMhSize = DRMStatusHeader1->DRMhSize;
     fmt = boost::format("DRM Status Header 1   (ParticipatingSlotID=0x%03x, CBit=%d, DRMhSize=%d)") % ParticipatingSlotID % CBit % DRMhSize;
     print(fmt.str());
 #endif
     next32();
-    mSummary.DRMStatusHeader2 = mUnion->DRMStatusHeader2;
+    mSummary.DRMStatusHeader2 = *mPointer;
 #ifdef VERBOSE
-    uint32_t SlotEnableMask = mUnion->DRMStatusHeader2.SlotEnableMask;
-    uint32_t FaultID = mUnion->DRMStatusHeader2.FaultID;
-    uint32_t RTOBit = mUnion->DRMStatusHeader2.RTOBit;
+    auto DRMStatusHeader2 = reinterpret_cast<DRMStatusHeader2_t *>(mPointer);
+    auto SlotEnableMask = DRMStatusHeader2->SlotEnableMask;
+    auto FaultID = DRMStatusHeader2->FaultID;
+    auto RTOBit = DRMStatusHeader2->RTOBit;
     fmt = boost::format("DRM Status Header 2   (SlotEnableMask=0x%03x, FaultID=%d, RTOBit=%d)") % SlotEnableMask % FaultID % RTOBit;
     print(fmt.str());
 #endif
     next32();
-    mSummary.DRMStatusHeader3 = mUnion->DRMStatusHeader3;
+    mSummary.DRMStatusHeader3 = *mPointer;
 #ifdef VERBOSE
-    uint32_t L0BCID = mUnion->DRMStatusHeader3.L0BCID;
-    uint32_t RunTimeInfo = mUnion->DRMStatusHeader3.RunTimeInfo;
+    auto DRMStatusHeader3 = reinterpret_cast<DRMStatusHeader3_t *>(mPointer);
+    auto L0BCID = DRMStatusHeader3->L0BCID;
+    auto RunTimeInfo = DRMStatusHeader3->RunTimeInfo;
     fmt = boost::format("DRM Status Header 3   (L0BCID=%d, RunTimeInfo=0x%03x)") % L0BCID % RunTimeInfo;
     print(fmt.str());
 #endif
     next32();
-    mSummary.DRMStatusHeader4 = mUnion->DRMStatusHeader4;
+    mSummary.DRMStatusHeader4 = *mPointer;
 #ifdef VERBOSE
     print("DRM Status Header 4");
 #endif
     next32();
-    mSummary.DRMStatusHeader5 = mUnion->DRMStatusHeader5;
+    mSummary.DRMStatusHeader5 = *mPointer;
 #ifdef VERBOSE
     print("DRM Status Header 5");
 #endif
@@ -341,11 +342,12 @@ namespace raw {
       if (IS_TRM_GLOBAL_HEADER(*mPointer) && GET_TRM_SLOTID(*mPointer) > 2) {
 	uint32_t SlotID = GET_TRM_SLOTID(*mPointer);
 	int itrm = SlotID - 3;
-	mSummary.TRMGlobalHeader[itrm] = mUnion->TRMGlobalHeader;
+	mSummary.TRMGlobalHeader[itrm] = *mPointer;
 #ifdef VERBOSE
-	uint32_t EventWords = mUnion->TRMGlobalHeader.EventWords;
-	uint32_t EventNumber = mUnion->TRMGlobalHeader.EventNumber;
-	uint32_t EBit = mUnion->TRMGlobalHeader.EBit;
+	auto TRMGlobalHeader = reinterpret_cast<TRMGlobalHeader_t *>(mPointer);
+	auto EventWords = TRMGlobalHeader->EventWords;
+	auto EventNumber = TRMGlobalHeader->EventNumber;
+	auto EBit = TRMGlobalHeader->EBit;
 	fmt = boost::format("TRM Global Header     (SlotID=%d, EventWords=%d, EventNumber=%d, EBit=%01x)") % SlotID % EventWords % EventNumber % EBit;
 	print(fmt.str());
 #endif
@@ -357,9 +359,10 @@ namespace raw {
 	  /** TRM chain-A header detected **/
 	  if (IS_TRM_CHAINA_HEADER(*mPointer) && GET_TRM_SLOTID(*mPointer) == SlotID) {
 	    int ichain = 0;
-	    mSummary.TRMChainHeader[itrm][ichain] = mUnion->TRMChainHeader;
+	    mSummary.TRMChainHeader[itrm][ichain] = *mPointer;
 #ifdef VERBOSE
-	    uint32_t BunchID = mUnion->TRMChainHeader.BunchID;
+	    auto TRMChainHeader = reinterpret_cast<TRMChainHeader_t *>(mPointer);
+	    auto BunchID = TRMChainHeader->BunchID;
 	    fmt = boost::format("TRM Chain-A Header    (SlotID=%d, BunchID=%d)") % SlotID % BunchID;
 	    print(fmt.str());
 #endif
@@ -371,16 +374,17 @@ namespace raw {
 	      /** TDC hit detected **/
 	      if (IS_TDC_HIT(*mPointer)) {
                 mSummary.TRMempty[itrm] = false;
-                int itdc = mUnion->TDCUnpackedHit.TDCID;
-		int ihit = mSummary.nTDCUnpackedHits[itrm][ichain][itdc];
-		mSummary.TDCUnpackedHit[itrm][ichain][itdc][ihit] = mUnion->TDCUnpackedHit;
+                auto itdc = GET_TDCHIT_TDCID(*mPointer);
+		auto ihit = mSummary.nTDCUnpackedHits[itrm][ichain][itdc];
+		mSummary.TDCUnpackedHit[itrm][ichain][itdc][ihit] = *mPointer;
 		mSummary.nTDCUnpackedHits[itrm][ichain][itdc]++;
 #ifdef VERBOSE
-		uint32_t HitTime = mUnion->TDCUnpackedHit.HitTime;
-		uint32_t Chan = mUnion->TDCUnpackedHit.Chan;
-		uint32_t TDCID = mUnion->TDCUnpackedHit.TDCID;
-		uint32_t EBit = mUnion->TDCUnpackedHit.EBit;
-		uint32_t PSBits = mUnion->TDCUnpackedHit.PSBits;
+		auto TDCUnpackedHit = reinterpret_cast<TDCUnpackedHit_t *>(mPointer);
+		auto HitTime = TDCUnpackedHit->HitTime;
+		auto Chan = TDCUnpackedHit->Chan;
+		auto TDCID = TDCUnpackedHit->TDCID;
+		auto EBit = TDCUnpackedHit->EBit;
+		auto PSBits = TDCUnpackedHit->PSBits;
 		fmt = boost::format("TDC Hit               (HitTime=%d, Chan=%d, TDCID=%d, EBit=%d, PSBits=%d") % HitTime % Chan % TDCID % EBit % PSBits;
 #endif
 		next32();
@@ -398,9 +402,10 @@ namespace raw {
 	      
 	      /** TRM chain-A trailer detected **/
 	      if (IS_TRM_CHAINA_TRAILER(*mPointer)) {
-		mSummary.TRMChainTrailer[itrm][ichain] = mUnion->TRMChainTrailer;
+		mSummary.TRMChainTrailer[itrm][ichain] = *mPointer;
 #ifdef VERBOSE
-		uint32_t EventCounter = mUnion->TRMChainTrailer.EventCounter;
+		auto TRMChainTrailer = reinterpret_cast<TRMChainTrailer_t *>(mPointer);
+		auto EventCounter = TRMChainTrailer->EventCounter;
 		fmt = boost::format("TRM Chain-A Trailer   (SlotID=%d, EventCounter=%d)") % SlotID % EventCounter;
 		print(fmt.str());
 #endif
@@ -419,9 +424,10 @@ namespace raw {
 	  /** TRM chain-B header detected **/
 	  if (IS_TRM_CHAINB_HEADER(*mPointer) && GET_TRM_SLOTID(*mPointer) == SlotID) {
 	    int ichain = 1;
-	    mSummary.TRMChainHeader[itrm][ichain] = mUnion->TRMChainHeader;
+	    mSummary.TRMChainHeader[itrm][ichain] = *mPointer;
 #ifdef VERBOSE
-	    uint32_t BunchID = mUnion->TRMChainHeader.BunchID;
+	    auto TRMChainHeader = reinterpret_cast<TRMChainHeader_t *>(mPointer);
+	    auto BunchID = TRMChainHeader->BunchID;
 	    fmt = boost::format("TRM Chain-B Header    (SlotID=%d, BunchID=%d)") % SlotID % BunchID;
 	    print(fmt.str());
 #endif
@@ -433,16 +439,17 @@ namespace raw {
 	      /** TDC hit detected **/
 	      if (IS_TDC_HIT(*mPointer)) {
                 mSummary.TRMempty[itrm] = false;
-                int itdc = mUnion->TDCUnpackedHit.TDCID;
-		int ihit = mSummary.nTDCUnpackedHits[itrm][ichain][itdc];
-		mSummary.TDCUnpackedHit[itrm][ichain][itdc][ihit] = mUnion->TDCUnpackedHit;
+                auto itdc = GET_TDCHIT_TDCID(*mPointer);
+		auto ihit = mSummary.nTDCUnpackedHits[itrm][ichain][itdc];
+		mSummary.TDCUnpackedHit[itrm][ichain][itdc][ihit] = *mPointer;
 		mSummary.nTDCUnpackedHits[itrm][ichain][itdc]++;
 #ifdef VERBOSE
-		uint32_t HitTime = mUnion->TDCUnpackedHit.HitTime;
-		uint32_t Chan = mUnion->TDCUnpackedHit.Chan;
-		uint32_t TDCID = mUnion->TDCUnpackedHit.TDCID;
-		uint32_t EBit = mUnion->TDCUnpackedHit.EBit;
-		uint32_t PSBits = mUnion->TDCUnpackedHit.PSBits;
+		auto TDCUnpackedHit = reinterpret_cast<TDCUnpackedHit_t *>(mPointer);
+		auto HitTime = TDCUnpackedHit->HitTime;
+		auto Chan = TDCUnpackedHit->Chan;
+		auto TDCID = TDCUnpackedHit->TDCID;
+		auto EBit = TDCUnpackedHit->EBit;
+		auto PSBits = TDCUnpackedHit->PSBits;
 		fmt = boost::format("TDC Hit               (HitTime=%d, Chan=%d, TDCID=%d, EBit=%d, PSBits=%d") % HitTime % Chan % TDCID % EBit % PSBits;
 		print(fmt.str());
 #endif
@@ -461,9 +468,10 @@ namespace raw {
 	      
 	      /** TRM chain-B trailer detected **/
 	      if (IS_TRM_CHAINB_TRAILER(*mPointer)) {
-		mSummary.TRMChainTrailer[itrm][ichain] = mUnion->TRMChainTrailer;
+		mSummary.TRMChainTrailer[itrm][ichain] = *mPointer;
 #ifdef VERBOSE
-		uint32_t EventCounter = mUnion->TRMChainTrailer.EventCounter;
+		auto TRMChainTrailer = reinterpret_cast<TRMChainTrailer_t *>(mPointer);
+		auto EventCounter = TRMChainTrailer->EventCounter;
 		fmt = boost::format("TRM Chain-B Trailer   (SlotID=%d, EventCounter=%d)") % SlotID % EventCounter;
 		print(fmt.str());
 #endif
@@ -481,10 +489,11 @@ namespace raw {
 	  
 	  /** TRM global trailer detected **/
 	  if (IS_TRM_GLOBAL_TRAILER(*mPointer)) {
-	    mSummary.TRMGlobalTrailer[itrm] = mUnion->TRMGlobalTrailer;
+	    mSummary.TRMGlobalTrailer[itrm] = *mPointer;
 #ifdef VERBOSE
-	    uint32_t EventCRC = mUnion->TRMGlobalTrailer.EventCRC;
-	    uint32_t LBit = mUnion->TRMGlobalTrailer.LBit;
+	    auto TRMGlobalTrailer = reinterpret_cast<TRMGlobalTrailer_t *>(mPointer);
+	    auto EventCRC = TRMGlobalTrailer->EventCRC;
+	    auto LBit = TRMGlobalTrailer->LBit;
 	    fmt = boost::format("TRM Global Trailer    (SlotID=%d, EventCRC=%d, LBit=%d)") % SlotID % EventCRC % LBit;
 	    print(fmt.str());
 #endif
@@ -514,9 +523,10 @@ namespace raw {
       
       /** DRM global trailer detected **/
       if (IS_DRM_GLOBAL_TRAILER(*mPointer)) {
-	mSummary.DRMGlobalTrailer = mUnion->DRMGlobalTrailer;
+	mSummary.DRMGlobalTrailer = *mPointer;
 #ifdef VERBOSE
-	uint32_t LocalEventCounter = mUnion->DRMGlobalTrailer.LocalEventCounter;
+	auto DRMGlobalTrailer = reinterpret_cast<DRMGlobalTrailer_t *>(mPointer);
+	auto LocalEventCounter = DRMGlobalTrailer->LocalEventCounter;
 	fmt = boost::format("DRM Global Trailer    (LocalEventCounter=%d)") % LocalEventCounter;
 	print(fmt.str());
 #endif
@@ -539,9 +549,6 @@ namespace raw {
       next32();
       
     } /** end of loop over DRM payload **/
-    
-    /** run SPIDER **/
-    //    spider();
     
     auto finish = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = finish - start;
@@ -579,9 +586,9 @@ namespace raw {
 #endif
 
     /** check DRM Global Header **/
-    if (mSummary.DRMGlobalHeader.raw() == 0) {
+    if (mSummary.DRMGlobalHeader == 0x0) {
       status = true;
-      mSummary.DRMFaultFlag = true;
+      mSummary.faultFlags |= 1;
 #ifdef VERBOSE
       fmt = boost::format("Missing DRM Global Header");
       if (mVerbose) std::cout << fmt << std::endl;
@@ -590,9 +597,9 @@ namespace raw {
     }
     
     /** check DRM Global Trailer **/
-    if (mSummary.DRMGlobalTrailer.raw() == 0) {
+    if (mSummary.DRMGlobalTrailer == 0x0) {
       status = true;
-      mSummary.DRMFaultFlag = true;
+      mSummary.faultFlags |= 1;
 #ifdef VERBOSE
       fmt = boost::format("Missing DRM Global Trailer");
       if (mVerbose) std::cout << fmt << std::endl;
@@ -601,10 +608,10 @@ namespace raw {
     }
 
     /** get DRM relevant data **/
-    uint32_t ParticipatingSlotID = mSummary.DRMStatusHeader1.ParticipatingSlotID;
-    uint32_t SlotEnableMask      = mSummary.DRMStatusHeader2.SlotEnableMask;
-    uint32_t L0BCID              = mSummary.DRMStatusHeader3.L0BCID;
-    uint32_t LocalEventCounter   = mSummary.DRMGlobalTrailer.LocalEventCounter;
+    uint32_t ParticipatingSlotID = GET_DRM_PARTICIPATINGSLOTID(mSummary.DRMStatusHeader1);
+    uint32_t SlotEnableMask      = GET_DRM_SLOTENABLEMASK(mSummary.DRMStatusHeader2);
+    uint32_t L0BCID              = GET_DRM_L0BCID(mSummary.DRMStatusHeader3);
+    uint32_t LocalEventCounter   = GET_DRM_LOCALEVENTCOUNTER(mSummary.DRMGlobalTrailer);
     
     if (ParticipatingSlotID != SlotEnableMask) {
 #ifdef VERBOSE
@@ -616,23 +623,24 @@ namespace raw {
     /** loop over TRMs **/
     for (int itrm = 0; itrm < 10; ++itrm) {
       uint32_t SlotID = itrm + 3;
-	
+      uint32_t trmFaultBit = 1 << (1 + itrm * 3);
+      
       /** check participating TRM **/
       if (!(ParticipatingSlotID & 1 << (itrm + 1))) {
-	mSummary.TRMFaultFlag[itrm] = true;
-	if (mSummary.TRMGlobalHeader[itrm].raw() != 0) {
+	if (mSummary.TRMGlobalHeader[itrm] != 0x0) {
 	  status = true;
 #ifdef VERBOSE
 	  printf("trm%02d: non-participating header found \n", SlotID);	
 #endif
 	}
+	mSummary.faultFlags |= trmFaultBit;
 	continue;
       }
       
       /** check TRM Global Header **/
-      if (mSummary.TRMGlobalHeader[itrm].raw() == 0) {
+      if (mSummary.TRMGlobalHeader[itrm] == 0x0) {
 	status = true;
-	mSummary.TRMFaultFlag[itrm] = true;
+	mSummary.faultFlags |= trmFaultBit;
 #ifdef VERBOSE
 	fmt = boost::format("Missing TRM Header (SlotID=%d)") % SlotID;
 	if (mVerbose) std::cout << fmt << std::endl;
@@ -641,9 +649,9 @@ namespace raw {
       }
 
       /** check TRM Global Trailer **/
-      if (mSummary.TRMGlobalTrailer[itrm].raw() == 0) {
+      if (mSummary.TRMGlobalTrailer[itrm] == 0x0) {
 	status = true;
-	mSummary.TRMFaultFlag[itrm] = true;
+	mSummary.faultFlags |= trmFaultBit;
 #ifdef VERBOSE
 	fmt = boost::format("Missing TRM Trailer (SlotID=%d)") % SlotID;
 	if (mVerbose) std::cout << fmt << std::endl;
@@ -656,7 +664,7 @@ namespace raw {
       uint32_t EventCounter = mSummary.TRMGlobalTrailer[itrm].EventCounter;
       if (EventCounter != LocalEventCounter) {
 	status = true;
-	mSummary.TRMFalutFlag[itrm] = true;
+	mSummary.faultFlags |= trmFaultBit;
 #ifdef VERBOSE
 	fmt = boost::format("TRM EventCounter / DRM LocalEventCounter mismatch: %d / %d (SlotID=%d)") % EventCounter % LocalEventCounter % SlotID;
 	if (mVerbose) std::cout << fmt << std::endl;
@@ -667,11 +675,12 @@ namespace raw {
       
       /** loop over TRM chains **/
       for (int ichain = 0; ichain < 2; ichain++) {
+	uint32_t chainFaultBit = trmFaultBit << (ichain + 1);
 	
  	/** check TRM Chain Header **/
-	if (mSummary.TRMChainHeader[itrm][ichain].raw() == 0) {
+	if (mSummary.TRMChainHeader[itrm][ichain] == 0x0) {
 	  status = true;
-	  mSummary.TRMChainFaultFlag[itrm][ichain] = true;
+	  mSummary.faultFlags |= chainFaultBit;
 #ifdef VERBOSE
 	  fmt = boost::format("Missing TRM Chain Header (SlotID=%d, chain=%d)") % SlotID % ichain;
 	  if (mVerbose) std::cout << fmt << std::endl;
@@ -680,9 +689,9 @@ namespace raw {
 	}
 
  	/** check TRM Chain Trailer **/
-	if (mSummary.TRMChainTrailer[itrm][ichain].raw() == 0) {
+	if (mSummary.TRMChainTrailer[itrm][ichain] == 0x0) {
 	  status = true;
-	  mSummary.TRMChainFaultFlag[itrm][ichain] = true;
+	  mSummary.faultFlags |= chainFaultBit;
 #ifdef VERBOSE
 	  fmt = boost::format("Missing TRM Chain Trailer (SlotID=%d, chain=%d)") % SlotID % ichain;
 	  if (mVerbose) std::cout << fmt << std::endl;
@@ -691,10 +700,10 @@ namespace raw {
 	}
 
 	/** check TRM Chain EventCounter **/
-	uint32_t EventCounter = mSummary.TRMChainTrailer[itrm][ichain].EventCounter;
+	auto EventCounter = GET_TRMCHAIN_EVENTCOUNTER(mSummary.TRMChainTrailer[itrm][ichain]);
 	if (EventCounter != LocalEventCounter) {
 	  status = true;
-	  mSummary.TRMChainFaultFlag[itrm][ichain] = true;
+	  mSummary.faultFlags |= chainFaultBit;
 #ifdef VERBOSE
 	  fmt = boost::format("TRM Chain EventCounter / DRM LocalEventCounter mismatch: %d / %d (SlotID=%d, chain=%d)") % EventCounter % EventCounter % SlotID % ichain;
 	  if (mVerbose) std::cout << fmt << std::endl;
@@ -703,10 +712,10 @@ namespace raw {
 	}
       
 	/** check TRM Chain Status **/
-	uint32_t Status = mSummary.TRMChainTrailer[itrm][ichain].Status;
+        auto Status = GET_TRMCHAIN_STATUS(mSummary.TRMChainTrailer[itrm][ichain]);
 	if (Status != 0) {
 	  status = true;
-	  mSummary.TRMChainFaultFlag[itrm][ichain] = true;
+	  mSummary.faultFlags |= chainFaultBit;
 #ifdef VERBOSE
 	  fmt = boost::format("TRM Chain bad Status: %d (SlotID=%d, chain=%d)") % Status % SlotID % ichain;
 	  if (mVerbose) std::cout << fmt << std::endl;
@@ -714,10 +723,10 @@ namespace raw {
 	}
 
 	/** check TRM Chain BunchID **/
-	uint32_t BunchID = mSummary.TRMChainHeader[itrm][ichain].BunchID;
+	uint32_t BunchID = GET_TRMCHAIN_BUNCHID(mSummary.TRMChainHeader[itrm][ichain]);
 	if (BunchID != L0BCID) {
 	  status = true;
-	  mSummary.TRMChainFaultFlag[itrm][ichain] = true;
+	  mSummary.faultFlags |= chainFaultBit;
 #ifdef VERBOSE
 	  fmt = boost::format("TRM Chain BunchID / DRM L0BCID mismatch: %d / %d (SlotID=%d, chain=%d)") % BunchID % L0BCID % SlotID % ichain;
 	  if (mVerbose) std::cout << fmt << std::endl;
