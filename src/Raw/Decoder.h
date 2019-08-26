@@ -24,7 +24,7 @@ namespace raw {
     bool decodeRDH();
     bool decode();
     bool check();
-    void rewind() {mPointer = mBuffer;};
+    void rewind() {mPointer = (uint32_t *)mBuffer;};
     bool close();
 
     void setVerbose(bool val) {mVerbose = val;};
@@ -49,11 +49,11 @@ namespace raw {
     std::ifstream mFile;
     char *mBuffer = nullptr;
     long mSize = 8192;
-    char *mPointer = nullptr;
+    uint32_t *mPointer = nullptr;
     char *mRewind = nullptr;
 
     bool mVerbose = false;
-    uint32_t mSkip = 4;
+    uint32_t mSkip = 1;
     uint32_t mSlotID;
     uint32_t mWordType;
     RDH_t *mRDH;

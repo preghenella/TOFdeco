@@ -4,6 +4,27 @@
 #include <stdint.h>
 #include <vector>
 
+//#define GET_BITMASK_AT_POS(x, m, p)
+
+#define IS_DRM_COMMON_HEADER(x)   ( (x & 0xF0000000) == 0x40000000 )
+#define IS_DRM_GLOBAL_HEADER(x)   ( (x & 0xF000000F) == 0x40000001 )
+#define IS_LTM_GLOBAL_HEADER(x)   ( (x & 0xF000000F) == 0x40000002 )
+#define IS_TRM_GLOBAL_HEADER(x)   ( (x & 0xF0000000) == 0x40000000 )
+#define IS_TRM_CHAINA_HEADER(x)   ( (x & 0xF0000000) == 0x00000000 )
+#define IS_TRM_CHAINB_HEADER(x)   ( (x & 0xF0000000) == 0x20000000 )
+
+#define IS_DRM_GLOBAL_TRAILER(x)  ( (x & 0xF000000F) == 0x50000001 )
+#define IS_LTM_GLOBAL_TRAILER(x)  ( (x & 0xF000000F) == 0x50000002 )
+#define IS_TRM_GLOBAL_TRAILER(x)  ( (x & 0xF0000003) == 0x50000003 )
+#define IS_TRM_CHAINA_TRAILER(x)  ( (x & 0xF0000000) == 0x10000000 )
+#define IS_TRM_CHAINB_TRAILER(x)  ( (x & 0xF0000000) == 0x30000000 )
+
+#define IS_TDC_ERROR(x)           ( (x & 0xF0000000) == 0x60000000 )
+#define IS_FILLER(x)              ( (x & 0xFFFFFFFF) == 0x70000000 )
+#define IS_TDC_HIT(x)             ( (x & 0x80000000) == 0x80000000 )
+
+#define GET_TRM_SLOTID(x) ( x & 0x0000000F )
+
 namespace tof {
 namespace data {
 namespace raw {

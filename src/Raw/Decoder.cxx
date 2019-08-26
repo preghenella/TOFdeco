@@ -71,7 +71,7 @@ namespace raw {
       return true;
     }
     mFile.read(mBuffer, mSize);
-    mPointer = mBuffer;
+    mPointer = (uint32_t *)mBuffer;
     if (!mFile) {
       std::cout << "Nothing else to read" << std::endl;
       return true; 
@@ -126,16 +126,16 @@ namespace raw {
   Decoder::next32()
   {
     mPointer += mSkip;
-    mMemoryCounter += mSkip;
+    mMemoryCounter += mSkip * 4;
     mByteCounter += 4;
-    mSkip = (mSkip + 8) % 16;
+    mSkip = (mSkip + 2) % 4;
     mUnion = reinterpret_cast<Union_t *>(mPointer);
   }
 
   inline void
   Decoder::next128()
   {
-    mPointer += 16;
+    mPointer += 4;
     mMemoryCounter += 16;
     mRDH = reinterpret_cast<RDH_t *>(mPointer);
   }
@@ -226,12 +226,13 @@ namespace raw {
     auto start = std::chrono::high_resolution_clock::now();
     mUnion = reinterpret_cast<Union_t *>(mPointer);
     mByteCounter = 0;
-    mSkip = 4;
+    mSkip = 1;
 
     clear();
+
     
-    /** DRM Common Header not detected **/
-    if (mUnion->Word.WordType != 4) {
+    /** check DRM Common Header **/
+    if (!IS_DRM_COMMON_HEADER(*mPointer)) {
 #ifdef VERBOSE
       print("[ERROR] fatal error");
 #endif
@@ -252,6 +253,15 @@ namespace raw {
     print(fmt.str());
 #endif
     next32();    
+
+    /** check DRM Global Header **/
+    if (!IS_DRM_GLOBAL_HEADER(*mPointer)) {
+#ifdef VERBOSE
+      print("[ERROR] fatal error");
+#endif
+      return true;
+    }
+
     mSummary.DRMGlobalHeader = mUnion->DRMGlobalHeader;
 #ifdef VERBOSE
     uint32_t DRMID = mUnion->DRMGlobalHeader.DRMID;
@@ -300,8 +310,8 @@ namespace raw {
     while (true) {
 
       /** LTM global header detected **/
-      if (mUnion->Word.WordType == 4 && mUnion->Word.SlotID == 2) {
-
+      if (IS_LTM_GLOBAL_HEADER(*mPointer)) {
+	
 #ifdef VERBOSE
 	print("LTM Global Header");
 #endif
@@ -311,7 +321,7 @@ namespace raw {
 	while (true) {
 
 	  /** LTM global trailer detected **/
-	  if (mUnion->Word.WordType == 5 && mUnion->Word.SlotID == 2) {
+	  if (IS_LTM_GLOBAL_TRAILER(*mPointer)) {
 #ifdef VERBOSE
 	    print("LTM Global Trailer");
 #endif
@@ -328,8 +338,8 @@ namespace raw {
       }
       
       /** TRM global header detected **/
-      if (mUnion->Word.WordType == 4 && mUnion->Word.SlotID > 2) {
-	uint32_t SlotID = mUnion->Word.SlotID;
+      if (IS_TRM_GLOBAL_HEADER(*mPointer) && GET_TRM_SLOTID(*mPointer) > 2) {
+	uint32_t SlotID = GET_TRM_SLOTID(*mPointer);
 	int itrm = SlotID - 3;
 	mSummary.TRMGlobalHeader[itrm] = mUnion->TRMGlobalHeader;
 #ifdef VERBOSE
@@ -345,7 +355,7 @@ namespace raw {
 	while (true) {
 
 	  /** TRM chain-A header detected **/
-	  if (mUnion->Word.WordType == 0 && mUnion->Word.SlotID == SlotID) {
+	  if (IS_TRM_CHAINA_HEADER(*mPointer) && GET_TRM_SLOTID(*mPointer) == SlotID) {
 	    int ichain = 0;
 	    mSummary.TRMChainHeader[itrm][ichain] = mUnion->TRMChainHeader;
 #ifdef VERBOSE
@@ -357,9 +367,9 @@ namespace raw {
 
 	    /** loop over TRM chain-A payload **/
 	    while (true) {
-
+	      
 	      /** TDC hit detected **/
-	      if (mUnion->Word.WordType & 0x8) {
+	      if (IS_TDC_HIT(*mPointer)) {
                 mSummary.TRMempty[itrm] = false;
                 int itdc = mUnion->TDCUnpackedHit.TDCID;
 		int ihit = mSummary.nTDCUnpackedHits[itrm][ichain][itdc];
@@ -378,26 +388,26 @@ namespace raw {
 	      }
 	      
 	      /** TDC error detected **/
-	      if (mUnion->Word.WordType == 6) {
+	      if (IS_TDC_ERROR(*mPointer)) {
 #ifdef VERBOSE
 		print("TDC error");
 #endif
 		next32();
 		continue;
 	      }
-
+	      
 	      /** TRM chain-A trailer detected **/
-	      if (mUnion->Word.WordType == 1) {
+	      if (IS_TRM_CHAINA_TRAILER(*mPointer)) {
 		mSummary.TRMChainTrailer[itrm][ichain] = mUnion->TRMChainTrailer;
 #ifdef VERBOSE
 		uint32_t EventCounter = mUnion->TRMChainTrailer.EventCounter;
-		fmt = boost::format("TRM Chain-Q Trailer   (SlotID=%d, EventCounter=%d)") % SlotID % EventCounter;
+		fmt = boost::format("TRM Chain-A Trailer   (SlotID=%d, EventCounter=%d)") % SlotID % EventCounter;
 		print(fmt.str());
 #endif
 		next32();
 		break;
 	      }
-		
+	      
 #ifdef VERBOSE
 	      print("[ERROR] breaking TRM Chain-A decode stream");
 #endif
@@ -407,7 +417,7 @@ namespace raw {
 	    }} /** end of loop over TRM chain-A payload **/	    
 	  
 	  /** TRM chain-B header detected **/
-	  if (mUnion->Word.WordType == 2 && mUnion->Word.SlotID == SlotID) {
+	  if (IS_TRM_CHAINB_HEADER(*mPointer) && GET_TRM_SLOTID(*mPointer) == SlotID) {
 	    int ichain = 1;
 	    mSummary.TRMChainHeader[itrm][ichain] = mUnion->TRMChainHeader;
 #ifdef VERBOSE
@@ -416,12 +426,12 @@ namespace raw {
 	    print(fmt.str());
 #endif
 	    next32();
-
+	    
 	    /** loop over TRM chain-B payload **/
 	    while (true) {
-
+	      
 	      /** TDC hit detected **/
-	      if (mUnion->Word.WordType & 0x8) {
+	      if (IS_TDC_HIT(*mPointer)) {
                 mSummary.TRMempty[itrm] = false;
                 int itdc = mUnion->TDCUnpackedHit.TDCID;
 		int ihit = mSummary.nTDCUnpackedHits[itrm][ichain][itdc];
@@ -441,16 +451,16 @@ namespace raw {
 	      }
 	      
 	      /** TDC error detected **/
-	      if (mUnion->Word.WordType == 6) {
+	      if (IS_TDC_ERROR(*mPointer)) {
 #ifdef VERBOSE
 		print("TDC error");
 #endif
 		next32();
 		continue;
 	      }
-
+	      
 	      /** TRM chain-B trailer detected **/
-	      if (mUnion->Word.WordType == 3) {
+	      if (IS_TRM_CHAINB_TRAILER(*mPointer)) {
 		mSummary.TRMChainTrailer[itrm][ichain] = mUnion->TRMChainTrailer;
 #ifdef VERBOSE
 		uint32_t EventCounter = mUnion->TRMChainTrailer.EventCounter;
@@ -460,7 +470,7 @@ namespace raw {
 		next32();
 		break;
 	      }
-		
+	      
 #ifdef VERBOSE
 	      print("[ERROR] breaking TRM Chain-B decode stream");
 #endif
@@ -470,7 +480,7 @@ namespace raw {
 	    }} /** end of loop over TRM chain-A payload **/	    
 	  
 	  /** TRM global trailer detected **/
-	  if (mUnion->Word.WordType == 5 && (mUnion->Word.SlotID & 0x3) == 0x3) {
+	  if (IS_TRM_GLOBAL_TRAILER(*mPointer)) {
 	    mSummary.TRMGlobalTrailer[itrm] = mUnion->TRMGlobalTrailer;
 #ifdef VERBOSE
 	    uint32_t EventCRC = mUnion->TRMGlobalTrailer.EventCRC;
@@ -481,7 +491,7 @@ namespace raw {
 	    next32();
 	    
  	    /** filler detected **/
-	    if (mUnion->Word.WordType == 7) {
+	    if (IS_FILLER(*mPointer)) {
 #ifdef VERBOSE
 	      print("Filler");
 #endif
@@ -498,12 +508,12 @@ namespace raw {
 	  break;
 	  
 	} /** end of loop over TRM payload **/
-
+	
 	continue;
       }
-	
+      
       /** DRM global trailer detected **/
-      if (mUnion->Word.WordType == 5 && mUnion->Word.SlotID == 1) {
+      if (IS_DRM_GLOBAL_TRAILER(*mPointer)) {
 	mSummary.DRMGlobalTrailer = mUnion->DRMGlobalTrailer;
 #ifdef VERBOSE
 	uint32_t LocalEventCounter = mUnion->DRMGlobalTrailer.LocalEventCounter;
@@ -513,7 +523,7 @@ namespace raw {
 	next32();
 	
 	/** filler detected **/
-	if (mUnion->Word.WordType == 7) {
+	if (IS_FILLER(*mPointer)) {
 #ifdef VERBOSE
 	  print("Filler");
 #endif
@@ -559,8 +569,7 @@ namespace raw {
     for (int itrm = 0; itrm < 10; itrm++) {
 
       /** check if TRM is empty **/
-      if (mSummary.TRMempty[itrm])
-	continue;
+      if (mSummary.TRMempty[itrm]) continue;
 
       /** loop over TRM chains **/
       for (int ichain = 0; ichain < 2; ++ichain) {
@@ -613,7 +622,6 @@ namespace raw {
 #ifdef VERBOSE
     boost::format fmt;
 #endif
-    char name[2] = {'A', 'A'};    
 
 #ifdef VERBOSE
     if (mVerbose)
