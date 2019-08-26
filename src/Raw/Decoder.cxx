@@ -561,56 +561,6 @@ namespace raw {
     return false;
   }
 
-  void
-  Decoder::spider()
-  {
-
-    /** loop over TRMs **/
-    for (int itrm = 0; itrm < 10; itrm++) {
-
-      /** check if TRM is empty **/
-      if (mSummary.TRMempty[itrm]) continue;
-
-      /** loop over TRM chains **/
-      for (int ichain = 0; ichain < 2; ++ichain) {
-	
-	/** loop over TDCs **/
-	for (int itdc = 0; itdc < 15; ++itdc) {
-	  
-          auto nhits = mSummary.nTDCUnpackedHits[itrm][ichain][itdc];
-          if (nhits == 0)
-            continue;
-
-          /** loop over hits **/
-          for (int ihit = 0; ihit < nhits; ++ihit) {
-
-            auto lhit = mSummary.TDCUnpackedHit[itrm][ichain][itdc][ihit];
-            if (lhit.PSBits != 0x1)
-              continue; // must be a leading hit
-            auto tot = 0;
-	    
-            // check next hits for packing
-            for (int jhit = ihit + 1; jhit < nhits; ++jhit) {
-              auto thit = mSummary.TDCUnpackedHit[itrm][ichain][itdc][jhit];
-              if (thit.PSBits == 0x2 && thit.Chan == lhit.Chan) { // must be a trailing hit from same channel
-                tot = thit.HitTime - lhit.HitTime; // compute TOT
-                lhit.PSBits = 0x0;                 // mark as used
-                break;
-              }
-            }
-
-	    auto phit = mSummary.nTRMSpiderHits[itrm];
-            mSummary.TRMSpiderHit[itrm][phit].Chain = ichain;
-            mSummary.TRMSpiderHit[itrm][phit].TDCID = itdc;
-            mSummary.TRMSpiderHit[itrm][phit].Chan = lhit.Chan;
-            mSummary.TRMSpiderHit[itrm][phit].HitTime = lhit.HitTime;
-            mSummary.TRMSpiderHit[itrm][phit].TOTWidth = tot;
-            mSummary.TRMSpiderHit[itrm][phit].EBit = lhit.EBit;
-            mSummary.nTRMSpiderHits[itrm]++;
-	    
-	  }}}}
-  }
-
   bool
   Decoder::check()
   {

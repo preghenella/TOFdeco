@@ -39,7 +39,6 @@ namespace raw {
   protected:
 
     void clear();
-    void spider();
     void print(std::string what);
     void printRDH(std::string what);
 
