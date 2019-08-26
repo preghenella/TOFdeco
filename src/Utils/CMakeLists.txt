@@ -21,3 +21,16 @@ install(TARGETS compressed_encoder RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/bin)
 add_executable(compressed_decoder compressed_decoder.cxx)
 target_link_libraries(compressed_decoder TOFdataCompressed ${Boost_PROGRAM_OPTIONS_LIBRARY})
 install(TARGETS compressed_decoder RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/bin)
+
+
+find_package(ROOT)
+include_directories(${ROOT_INCLUDE_DIRS})
+
+add_executable(raw_histogrammer raw_histogrammer.cxx)
+target_link_libraries(raw_histogrammer TOFdataRaw ${Boost_PROGRAM_OPTIONS_LIBRARY} ${ROOT_LIBRARIES})
+install(TARGETS raw_histogrammer RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/bin)
+
+add_executable(compressed_histogrammer compressed_histogrammer.cxx)
+target_link_libraries(compressed_histogrammer TOFdataCompressed ${Boost_PROGRAM_OPTIONS_LIBRARY} ${ROOT_LIBRARIES})
+install(TARGETS compressed_histogrammer RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/bin)
+

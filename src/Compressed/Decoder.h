@@ -23,6 +23,7 @@ namespace compressed {
     bool decode();
     bool close();
     void setVerbose(bool val) {mVerbose = val;};
+    const Summary_t &getSummary() const {return mSummary;};
 
     // benchmarks
     double mIntegratedBytes = 0.;
@@ -30,6 +31,7 @@ namespace compressed {
     
   protected:
 
+    void clear();
     void print(std::string what);
 
     std::ifstream mFile;
@@ -39,6 +41,8 @@ namespace compressed {
     bool mVerbose;
     Union_t *mUnion;
 
+    Summary_t mSummary;
+    uint32_t mByteCounter = 0;
     
   };
   

@@ -3,6 +3,8 @@
 #include <chrono>
 #include <boost/format.hpp>
 
+//#define VERBOSE
+
 namespace tof {
 namespace data {
 namespace compressed {
@@ -61,6 +63,15 @@ namespace compressed {
     }    
     return false;
   }
+
+  void
+  Decoder::clear()
+  {
+    mSummary.CrateHeader  = {0x0};
+    mSummary.CrateOrbit   = {0x0};
+    mSummary.CrateTrailer  = {0x0};
+    mSummary.nHits = 0;
+  }
   
   bool
   Decoder::decode()
@@ -71,42 +82,46 @@ namespace compressed {
 #endif
     auto start = std::chrono::high_resolution_clock::now();
 
-    unsigned int nWords = 1;
+    clear();
+    mByteCounter = 0;
 
+    mSummary.CrateHeader = mUnion->CrateHeader;
+#ifdef VERBOSE
     auto BunchID = mUnion->CrateHeader.BunchID;
     auto EventCounter = mUnion->CrateHeader.EventCounter;
     auto DRMID = mUnion->CrateHeader.DRMID;
-#ifdef VERBOSE
     print(str(boost::format("Crate header (DRMID=%d, EventCounter=%d, BunchID=%d)") % DRMID % EventCounter % BunchID));
 #endif
-    mUnion++; nWords++;
+    mUnion++; mByteCounter += 4;
 
-    auto OrbitID = mUnion->CrateOrbit.OrbitID;
+    mSummary.CrateOrbit = mUnion->CrateOrbit;
 #ifdef VERBOSE
+    auto OrbitID = mUnion->CrateOrbit.OrbitID;
     print(str(boost::format("Crate orbit (OrbitID=%d)") % OrbitID));
 #endif
-    mUnion++; nWords++;
+    mUnion++; mByteCounter += 4;
 
     /** loop over Crate payload **/
     while (true) {
       
       /** Crate trailer detected **/
       if (mUnion->Word.WordType == 1) {
+	mSummary.CrateTrailer = mUnion->CrateTrailer;
 #ifdef VERBOSE
 	print("Crate trailer");
 #endif
-	mUnion++; nWords++;
+	mUnion++; mByteCounter += 4;
 	
 	auto finish = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double> elapsed = finish - start;
 	
-	mIntegratedBytes += nWords * 4;
+	mIntegratedBytes += mByteCounter;
 	mIntegratedTime += elapsed.count();
 	
 #ifdef VERBOSE
 	if (mVerbose)
 	  std::cout << "-------- END DECODE EVENT ------------------------------------------"
-		    << " | " << nWords << " words"
+		    << " | " << mByteCounter << " bytes"
 		    << " | " << 1.e3  * elapsed.count() << " ms"
 		    << " | " << 1.e-6 * mIntegratedBytes / mIntegratedTime << " MB/s (average)"
 		    << std::endl;
@@ -117,14 +132,18 @@ namespace compressed {
 
       /** Frame header detected **/
       auto NumberOfHits = mUnion->FrameHeader.NumberOfHits;
-      auto FrameID = mUnion->FrameHeader.FrameID;
-      auto TRMID = mUnion->FrameHeader.TRMID;
+      auto FrameHeader = mUnion->FrameHeader;
 #ifdef VERBOSE
+      auto TRMID = mUnion->FrameHeader.TRMID;
+      auto FrameID = mUnion->FrameHeader.FrameID;
       print(str(boost::format("Frame header (TRMID=%d, FrameID=%d, NumberOfHits=%d)") % TRMID % FrameID % NumberOfHits));
 #endif
-      mUnion++; nWords++;
+      mUnion++; mByteCounter += 4;
       /** loop over frame payload **/
       for (int ihit = 0; ihit < NumberOfHits; ihit++) {
+	mSummary.FrameHeader[mSummary.nHits] = FrameHeader;
+	mSummary.PackedHit[mSummary.nHits] = mUnion->PackedHit;
+	mSummary.nHits++;
 #ifdef VERBOSE
 	auto Chain = mUnion->PackedHit.Chain;
 	auto TDCID = mUnion->PackedHit.TDCID;
@@ -133,7 +152,7 @@ namespace compressed {
 	auto TOT = mUnion->PackedHit.TOT;
 	print(str(boost::format("Packed hit (Chain=%d, TDCID=%d, Channel=%d, Time=%d, TOT=%d)") % Chain % TDCID % Channel % Time % TOT));
 #endif
-	mUnion++; nWords++;
+	mUnion++; mByteCounter += 4;
       }
       
     }

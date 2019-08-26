@@ -76,6 +76,17 @@ namespace compressed {
     PackedHit_t    PackedHit;
     CrateTrailer_t CrateTrailer;
   };
+
+  /** summary **/
+  struct Summary_t
+  {
+    CrateHeader_t  CrateHeader;
+    CrateOrbit_t   CrateOrbit;
+    uint32_t nHits;
+    FrameHeader_t FrameHeader[1024];
+    PackedHit_t   PackedHit[1024];
+    CrateTrailer_t CrateTrailer;
+  };
   
   
 }}}
