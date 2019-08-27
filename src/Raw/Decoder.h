@@ -23,7 +23,7 @@ namespace raw {
     bool read();
     bool decodeRDH();
     bool decode();
-    void rewind() {mPointer = (uint32_t *)mBuffer; mMemoryCounter = 0;};
+    void rewind() {mPointer = (uint32_t *)mBuffer;};
     bool close();
 
     void setVerbose(bool val) {mVerbose = val;};
@@ -58,7 +58,6 @@ namespace raw {
     Summary_t mSummary;    
 
     uint32_t mPageCounter = 0;
-    uint32_t mMemoryCounter = 0;
     uint32_t mByteCounter = 0;
     
   };

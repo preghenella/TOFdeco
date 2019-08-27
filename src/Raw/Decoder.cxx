@@ -83,7 +83,6 @@ namespace raw {
 		<< std::endl;
     }
 #endif
-    mMemoryCounter = 0;
     mPageCounter++;
     return false;
   }
@@ -123,16 +122,14 @@ namespace raw {
   Decoder::next32()
   {
     mPointer += mSkip;
-    mMemoryCounter += mSkip * 4;
-    mByteCounter += 4;
     mSkip = (mSkip + 2) % 4;
+    mByteCounter += 4;
   }
 
   inline void
   Decoder::next128()
   {
     mPointer += 4;
-    mMemoryCounter += 16;
     mRDH = reinterpret_cast<RDH_t *>(mPointer);
   }
   
@@ -214,7 +211,7 @@ namespace raw {
 #endif
 
     /** check if we have memory to decode **/
-    if (mMemoryCounter >= mSummary.RDHWord0.MemorySize) {
+    if ((char *)mPointer - mBuffer >= mSummary.RDHWord0.MemorySize) {
 #ifdef VERBOSE
       if (mVerbose) {
 	std::cout << "Warning: decode request exceeds memory size" << std::endl;
