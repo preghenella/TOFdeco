@@ -10,7 +10,7 @@
 int main(int argc, char **argv)
 {
 
-  bool verbose = false;
+  bool verbose = false, rewind = false;
   std::string inFileName, outFileName;
   
   /** define arguments **/
@@ -19,6 +19,7 @@ int main(int argc, char **argv)
   desc.add_options()
     ("help", "Print help messages")
     ("verbose,v", po::bool_switch(&verbose), "Decode verbose")
+    ("rewind,r", po::bool_switch(&rewind), "Rewind on failed check")
     ("input,i", po::value<std::string>(&inFileName), "Input data file")
     ("output,o", po::value<std::string>(&outFileName), "Output data file")
     //    ("word,w",  po::value<int>(&wordn)->default_value(2), "Word where to find the data")
@@ -78,7 +79,7 @@ int main(int argc, char **argv)
     while (!decoder.decode()) {
       
       /** check: if error rewind, print and pause **/
-      if (checker.check(decoder.getSummary())) {
+      if (checker.check(decoder.getSummary()) && rewind) {
 	decoder.rewind();
 	decoder.setVerbose(true);
 	checker.setVerbose(true);
