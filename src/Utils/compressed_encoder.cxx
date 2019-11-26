@@ -2,6 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include <cstdint>
+#include <chrono>
 #include "Raw/Decoder.h"
 #include "Raw/Checker.h"
 #include "Compressed/Encoder.h"
