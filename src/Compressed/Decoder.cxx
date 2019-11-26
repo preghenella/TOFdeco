@@ -1,9 +1,6 @@
 #include "Decoder.h"
 #include <iostream>
 #include <chrono>
-#include <boost/format.hpp>
-
-//#define VERBOSE
 
 namespace tof {
 namespace data {
@@ -46,19 +43,12 @@ namespace compressed {
     return false;
   }
 
-  void
-  Decoder::print(std::string what)
-  {
-    if (mVerbose)
-      std::cout << boost::format("%08x") % mUnion->Data << " " << what << std::endl;
-  }
-  
   bool
   Decoder::next()
   {
     if (((char *)mUnion - mBuffer) >= mSize) return true;
     if (mUnion->Word.WordType != 1) {
-      print("[ERROR]");
+      printf(" %08x [ERROR] \n", mUnion->Data);
       return true;
     }    
     return false;
@@ -76,7 +66,7 @@ namespace compressed {
   bool
   Decoder::decode()
   {
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose)
       std::cout << "-------- START DECODE EVENT ----------------------------------------" << std::endl;
 #endif
@@ -86,18 +76,18 @@ namespace compressed {
     mByteCounter = 0;
 
     mSummary.CrateHeader = mUnion->CrateHeader;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     auto BunchID = mUnion->CrateHeader.BunchID;
     auto EventCounter = mUnion->CrateHeader.EventCounter;
     auto DRMID = mUnion->CrateHeader.DRMID;
-    print(str(boost::format("Crate header (DRMID=%d, EventCounter=%d, BunchID=%d)") % DRMID % EventCounter % BunchID));
+    printf(" %08x Crate header (DRMID=%d, EventCounter=%d, BunchID=%d) \n", mUnion->Data, DRMID, EventCounter, BunchID);
 #endif
     mUnion++; mByteCounter += 4;
 
     mSummary.CrateOrbit = mUnion->CrateOrbit;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     auto OrbitID = mUnion->CrateOrbit.OrbitID;
-    print(str(boost::format("Crate orbit (OrbitID=%d)") % OrbitID));
+    printf(" %08x Crate orbit (OrbitID=%d) \n", mUnion->Data, OrbitID);
 #endif
     mUnion++; mByteCounter += 4;
 
@@ -107,8 +97,8 @@ namespace compressed {
       /** Crate trailer detected **/
       if (mUnion->Word.WordType == 1) {
 	mSummary.CrateTrailer = mUnion->CrateTrailer;
-#ifdef VERBOSE
-	print("Crate trailer");
+#ifdef DECODE_VERBOSE
+	printf(" %08x Crate trailer \n", mUnion->Data);
 #endif
 	mUnion++; mByteCounter += 4;
 	
@@ -118,7 +108,7 @@ namespace compressed {
 	mIntegratedBytes += mByteCounter;
 	mIntegratedTime += elapsed.count();
 	
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 	if (mVerbose)
 	  std::cout << "-------- END DECODE EVENT ------------------------------------------"
 		    << " | " << mByteCounter << " bytes"
@@ -133,10 +123,10 @@ namespace compressed {
       /** Frame header detected **/
       auto NumberOfHits = mUnion->FrameHeader.NumberOfHits;
       auto FrameHeader = mUnion->FrameHeader;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
       auto TRMID = mUnion->FrameHeader.TRMID;
       auto FrameID = mUnion->FrameHeader.FrameID;
-      print(str(boost::format("Frame header (TRMID=%d, FrameID=%d, NumberOfHits=%d)") % TRMID % FrameID % NumberOfHits));
+      printf(" %08x Frame header (TRMID=%d, FrameID=%d, NumberOfHits=%d) \n", mUnion->Data, TRMID, FrameID, NumberOfHits);
 #endif
       mUnion++; mByteCounter += 4;
       /** loop over frame payload **/
@@ -144,13 +134,13 @@ namespace compressed {
 	mSummary.FrameHeader[mSummary.nHits] = FrameHeader;
 	mSummary.PackedHit[mSummary.nHits] = mUnion->PackedHit;
 	mSummary.nHits++;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 	auto Chain = mUnion->PackedHit.Chain;
 	auto TDCID = mUnion->PackedHit.TDCID;
 	auto Channel = mUnion->PackedHit.Channel;
 	auto Time = mUnion->PackedHit.Time;
 	auto TOT = mUnion->PackedHit.TOT;
-	print(str(boost::format("Packed hit (Chain=%d, TDCID=%d, Channel=%d, Time=%d, TOT=%d)") % Chain % TDCID % Channel % Time % TOT));
+	printf(" %08x Packed hit (Chain=%d, TDCID=%d, Channel=%d, Time=%d, TOT=%d) \n", mUnion->Data, Chain, TDCID, Channel, Time, TOT);
 #endif
 	mUnion++; mByteCounter += 4;
       }

@@ -1,7 +1,6 @@
 #include "Decoder.h"
 #include <iostream>
 #include <chrono>
-#include <boost/format.hpp>
 
 namespace tof {
 namespace data {
@@ -10,7 +9,7 @@ namespace raw {
   bool
   Decoder::init()
   {
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
       std::cout << "-------- INITIALISE DECODER BUFFER ---------------------------------"
 		<< " | " << mSize << " bytes"
@@ -76,7 +75,7 @@ namespace raw {
       std::cout << "Nothing else to read" << std::endl;
       return true; 
     }
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
       std::cout << "-------- READ CRU PAGE ---------------------------------------------"
 		<< " | " << mSize << " bytes"
@@ -85,12 +84,6 @@ namespace raw {
 #endif
     mPageCounter++;
     return false;
-  }
-  
-  void
-  Decoder::print(std::string what)
-  {
-      std::cout << " " << boost::format("%08x") % *mPointer << " " << what << std::endl;
   }
   
   void
@@ -133,21 +126,12 @@ namespace raw {
     mRDH = reinterpret_cast<RDH_t *>(mPointer);
   }
   
-  void
-  Decoder::printRDH(std::string what)
-  {
-    for (int i = 3; i >= 0; --i)
-      std::cout << boost::format("%08x") % mRDH->Data[i];
-    std::cout << " " << what << std::endl;
-  }
-  
   bool
   Decoder::decodeRDH()
   {
     mRDH = reinterpret_cast<RDH_t *>(mPointer);
 
-#ifdef VERBOSE
-    boost::format fmt;
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
       std::cout << "-------- START DECODE RDH ------------------------------------------"
 		<< " | " << mPageCounter << " pages"
@@ -156,45 +140,45 @@ namespace raw {
 #endif
 
     mSummary.RDHWord0 = mRDH->Word0;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
       uint32_t BlockLength = mRDH->Word0.BlockLength;
       uint32_t PacketCounter = mRDH->Word0.PacketCounter;
       uint32_t HeaderSize = mRDH->Word0.HeaderSize;
       uint32_t MemorySize = mRDH->Word0.MemorySize;
-      fmt = boost::format("RDH Word0 (MemorySize=%d, PacketCounter=%d)") % MemorySize % PacketCounter;
-      printRDH(fmt.str());
+      printf(" %08x%08x%08x%08x RDH Word0 (MemorySize=%d, PacketCounter=%d) \n", mRDH->Data[3], mRDH->Data[2], mRDH->Data[1], mRDH->Data[0],
+	     MemorySize, PacketCounter);
     }
 #endif
     next128();
 
     mSummary.RDHWord1 = mRDH->Word1;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
       uint32_t TrgOrbit = mRDH->Word1.TrgOrbit;
       uint32_t HbOrbit = mRDH->Word1.HbOrbit;
-      fmt = boost::format("RDH Word1 (TrgOrbit=%d, HbOrbit=%d)") % TrgOrbit % HbOrbit;
-      printRDH(fmt.str());
+      printf(" %08x%08x%08x%08x RDH Word1 (TrgOrbit=%d, HbOrbit=%d) \n", mRDH->Data[3], mRDH->Data[2], mRDH->Data[1], mRDH->Data[0],
+	     TrgOrbit, HbOrbit);
     }
 #endif
     next128();
 
     mSummary.RDHWord2 = mRDH->Word2;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
       uint32_t TrgBC = mRDH->Word2.TrgBC;
       uint32_t HbBC = mRDH->Word2.HbBC;
       uint32_t TrgType = mRDH->Word2.TrgType;
-      fmt = boost::format("RDH Word2 (TrgBC=%d, HbBC=%d, TrgType=%d)") % TrgBC % HbBC % TrgType;
-      printRDH(fmt.str());
+      printf(" %08x%08x%08x%08x RDH Word2 (TrgBC=%d, HbBC=%d, TrgType=%d) \n", mRDH->Data[3], mRDH->Data[2], mRDH->Data[1], mRDH->Data[0],
+	     TrgBC, HbBC, TrgType);
     }
 #endif
     next128();
 
     mSummary.RDHWord3 = mRDH->Word3;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
-      printRDH("RDH Word3");
+      printf(" %08x%08x%08x%08x RDH Word3 \n", mRDH->Data[3], mRDH->Data[2], mRDH->Data[1], mRDH->Data[0]);
     }
 #endif
     next128();
@@ -206,13 +190,9 @@ namespace raw {
   Decoder::decode()
   {
 
-#ifdef VERBOSE
-    boost::format fmt;
-#endif
-
     /** check if we have memory to decode **/
     if ((char *)mPointer - mBuffer >= mSummary.RDHWord0.MemorySize) {
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
       if (mVerbose) {
 	std::cout << "Warning: decode request exceeds memory size" << std::endl;
       }
@@ -220,7 +200,7 @@ namespace raw {
       return true;
     }
 
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
       std::cout << "-------- START DECODE EVENT ----------------------------------------" << std::endl;    
     }
@@ -234,107 +214,101 @@ namespace raw {
     
     /** check DRM Common Header **/
     if (!IS_DRM_COMMON_HEADER(*mPointer)) {
-#ifdef VERBOSE
-      print("[ERROR] fatal error");
+#ifdef DECODE_VERBOSE
+      printf(" %08x [ERROR] fatal error \n", *mPointer);
 #endif
       return true;
     }
     mSummary.DRMCommonHeader = *mPointer;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
       auto DRMCommonHeader = reinterpret_cast<DRMCommonHeader_t *>(mPointer);
       auto Payload = DRMCommonHeader->Payload;
-      fmt = boost::format("DRM Common Header     (Payload=%d)") % Payload;
-      print(fmt.str());
+      printf(" %08x DRM Common Header     (Payload=%d) \n", *mPointer, Payload);
     }
 #endif
     next32();
 
     /** DRM Orbit Header **/
     mSummary.DRMOrbitHeader = *mPointer;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
       auto DRMOrbitHeader = reinterpret_cast<DRMOrbitHeader_t *>(mPointer);
       auto Orbit = DRMOrbitHeader->Orbit;
-      fmt = boost::format("DRM Orbit Header      (Orbit=%d)") % Orbit;
-      print(fmt.str());
+      printf(" %08x DRM Orbit Header      (Orbit=%d) \n", *mPointer, Orbit);
     }
 #endif
     next32();    
 
     /** check DRM Global Header **/
     if (!IS_DRM_GLOBAL_HEADER(*mPointer)) {
-#ifdef VERBOSE
-      print("[ERROR] fatal error");
+#ifdef DECODE_VERBOSE
+      printf(" %08x [ERROR] fatal error \n", *mPointer);
 #endif
       return true;
     }
     mSummary.DRMGlobalHeader = *mPointer;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
       auto DRMGlobalHeader = reinterpret_cast<DRMGlobalHeader_t *>(mPointer);
       auto DRMID = DRMGlobalHeader->DRMID;
-      fmt = boost::format("DRM Global Header     (DRMID=%d)") % DRMID;
-      print(fmt.str());
+      printf(" %08x DRM Global Header     (DRMID=%d) \n", *mPointer, DRMID);
     }
 #endif
     next32();
 
     /** DRM Status Header 1 **/
     mSummary.DRMStatusHeader1 = *mPointer;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
       auto DRMStatusHeader1 = reinterpret_cast<DRMStatusHeader1_t *>(mPointer);
       auto ParticipatingSlotID = DRMStatusHeader1->ParticipatingSlotID;
       auto CBit = DRMStatusHeader1->CBit;
       auto DRMhSize = DRMStatusHeader1->DRMhSize;
-      fmt = boost::format("DRM Status Header 1   (ParticipatingSlotID=0x%03x, CBit=%d, DRMhSize=%d)") % ParticipatingSlotID % CBit % DRMhSize;
-      print(fmt.str());
+      printf(" %08x DRM Status Header 1   (ParticipatingSlotID=0x%03x, CBit=%d, DRMhSize=%d) \n", *mPointer, ParticipatingSlotID, CBit, DRMhSize);
     }
 #endif
     next32();
 
     /** DRM Status Header 2 **/
     mSummary.DRMStatusHeader2 = *mPointer;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
       auto DRMStatusHeader2 = reinterpret_cast<DRMStatusHeader2_t *>(mPointer);
       auto SlotEnableMask = DRMStatusHeader2->SlotEnableMask;
       auto FaultID = DRMStatusHeader2->FaultID;
       auto RTOBit = DRMStatusHeader2->RTOBit;
-      fmt = boost::format("DRM Status Header 2   (SlotEnableMask=0x%03x, FaultID=%d, RTOBit=%d)") % SlotEnableMask % FaultID % RTOBit;
-      print(fmt.str());
+      printf(" %08x DRM Status Header 2   (SlotEnableMask=0x%03x, FaultID=%d, RTOBit=%d) \n", *mPointer, SlotEnableMask, FaultID, RTOBit);
     }
 #endif
     next32();
 
     /** DRM Status Header 3 **/
     mSummary.DRMStatusHeader3 = *mPointer;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
       auto DRMStatusHeader3 = reinterpret_cast<DRMStatusHeader3_t *>(mPointer);
       auto L0BCID = DRMStatusHeader3->L0BCID;
       auto RunTimeInfo = DRMStatusHeader3->RunTimeInfo;
-      fmt = boost::format("DRM Status Header 3   (L0BCID=%d, RunTimeInfo=0x%03x)") % L0BCID % RunTimeInfo;
-      print(fmt.str());
+      printf(" %08x DRM Status Header 3   (L0BCID=%d, RunTimeInfo=0x%03x) \n", *mPointer, L0BCID, RunTimeInfo);
     }
 #endif
     next32();
 
     /** DRM Status Header 4 **/
     mSummary.DRMStatusHeader4 = *mPointer;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
-      print("DRM Status Header 4");
+      printf(" %08x DRM Status Header 4 \n", *mPointer);
     }
 #endif
     next32();
 
     /** DRM Status Header 5 **/
     mSummary.DRMStatusHeader5 = *mPointer;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
-      print("DRM Status Header 5");
+      printf(" %08x DRM Status Header 5 \n", *mPointer);
     }
 #endif
     next32();
@@ -345,9 +319,9 @@ namespace raw {
       /** LTM global header detected **/
       if (IS_LTM_GLOBAL_HEADER(*mPointer)) {
 	
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 	if (mVerbose) {
-	  print("LTM Global Header");
+	  printf(" %08x LTM Global Header \n", *mPointer);
 	}
 #endif
 	next32();
@@ -357,18 +331,18 @@ namespace raw {
 
 	  /** LTM global trailer detected **/
 	  if (IS_LTM_GLOBAL_TRAILER(*mPointer)) {
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 	    if (mVerbose) {
-	      print("LTM Global Trailer");
+	      printf(" %08x LTM Global Trailer \n", *mPointer);
 	    }
 #endif
 	    next32();
 	    break;
 	  }
 
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 	  if (mVerbose) {
-	    print("LTM data");
+	    printf(" %08x LTM data \n", *mPointer);
 	  }
 #endif
 	  next32();
@@ -381,14 +355,13 @@ namespace raw {
 	uint32_t SlotID = GET_TRM_SLOTID(*mPointer);
 	int itrm = SlotID - 3;
 	mSummary.TRMGlobalHeader[itrm] = *mPointer;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 	if (mVerbose) {
 	  auto TRMGlobalHeader = reinterpret_cast<TRMGlobalHeader_t *>(mPointer);
 	  auto EventWords = TRMGlobalHeader->EventWords;
 	  auto EventNumber = TRMGlobalHeader->EventNumber;
 	  auto EBit = TRMGlobalHeader->EBit;
-	  fmt = boost::format("TRM Global Header     (SlotID=%d, EventWords=%d, EventNumber=%d, EBit=%01x)") % SlotID % EventWords % EventNumber % EBit;
-	  print(fmt.str());
+	  printf(" %08x TRM Global Header     (SlotID=%d, EventWords=%d, EventNumber=%d, EBit=%01x) \n", *mPointer, SlotID, EventWords, EventNumber, EBit);
 	}
 #endif
 	next32();
@@ -400,12 +373,11 @@ namespace raw {
 	  if (IS_TRM_CHAINA_HEADER(*mPointer) && GET_TRM_SLOTID(*mPointer) == SlotID) {
 	    int ichain = 0;
 	    mSummary.TRMChainHeader[itrm][ichain] = *mPointer;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 	    if (mVerbose) {
 	      auto TRMChainHeader = reinterpret_cast<TRMChainHeader_t *>(mPointer);
 	      auto BunchID = TRMChainHeader->BunchID;
-	      fmt = boost::format("TRM Chain-A Header    (SlotID=%d, BunchID=%d)") % SlotID % BunchID;
-	      print(fmt.str());
+	      printf(" %08x TRM Chain-A Header    (SlotID=%d, BunchID=%d) \n", *mPointer, SlotID, BunchID);
 	    }
 #endif
 	    next32();
@@ -420,7 +392,7 @@ namespace raw {
 		auto ihit = mSummary.nTDCUnpackedHits[itrm][ichain][itdc];
 		mSummary.TDCUnpackedHit[itrm][ichain][itdc][ihit] = *mPointer;
 		mSummary.nTDCUnpackedHits[itrm][ichain][itdc]++;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 		if (mVerbose) {
 		  auto TDCUnpackedHit = reinterpret_cast<TDCUnpackedHit_t *>(mPointer);
 		  auto HitTime = TDCUnpackedHit->HitTime;
@@ -428,8 +400,7 @@ namespace raw {
 		  auto TDCID = TDCUnpackedHit->TDCID;
 		  auto EBit = TDCUnpackedHit->EBit;
 		  auto PSBits = TDCUnpackedHit->PSBits;
-		  fmt = boost::format("TDC Hit               (HitTime=%d, Chan=%d, TDCID=%d, EBit=%d, PSBits=%d") % HitTime % Chan % TDCID % EBit % PSBits;
-		  print(fmt.str());
+		  printf(" %08x TDC Hit               (HitTime=%d, Chan=%d, TDCID=%d, EBit=%d, PSBits=%d \n", *mPointer, HitTime, Chan, TDCID, EBit, PSBits);
 		}
 #endif
 		next32();
@@ -438,9 +409,9 @@ namespace raw {
 	      
 	      /** TDC error detected **/
 	      if (IS_TDC_ERROR(*mPointer)) {
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 		if (mVerbose) {
-		  print("TDC error");
+		  printf(" %08x TDC error \n", *mPointer);
 		}
 #endif
 		next32();
@@ -450,21 +421,20 @@ namespace raw {
 	      /** TRM chain-A trailer detected **/
 	      if (IS_TRM_CHAINA_TRAILER(*mPointer)) {
 		mSummary.TRMChainTrailer[itrm][ichain] = *mPointer;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 		if (mVerbose) {
 		  auto TRMChainTrailer = reinterpret_cast<TRMChainTrailer_t *>(mPointer);
 		  auto EventCounter = TRMChainTrailer->EventCounter;
-		  fmt = boost::format("TRM Chain-A Trailer   (SlotID=%d, EventCounter=%d)") % SlotID % EventCounter;
-		  print(fmt.str());
+		  printf(" %08x TRM Chain-A Trailer   (SlotID=%d, EventCounter=%d) \n", *mPointer, SlotID, EventCounter);
 		}
 #endif
 		next32();
 		break;
 	      }
 	      
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 	      if (mVerbose) {
-		print("[ERROR] breaking TRM Chain-A decode stream");
+		printf(" %08x [ERROR] breaking TRM Chain-A decode stream \n", *mPointer);
 	      }
 #endif
 	      next32();
@@ -476,12 +446,11 @@ namespace raw {
 	  if (IS_TRM_CHAINB_HEADER(*mPointer) && GET_TRM_SLOTID(*mPointer) == SlotID) {
 	    int ichain = 1;
 	    mSummary.TRMChainHeader[itrm][ichain] = *mPointer;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 	    if (mVerbose) {
 	      auto TRMChainHeader = reinterpret_cast<TRMChainHeader_t *>(mPointer);
 	      auto BunchID = TRMChainHeader->BunchID;
-	      fmt = boost::format("TRM Chain-B Header    (SlotID=%d, BunchID=%d)") % SlotID % BunchID;
-	      print(fmt.str());
+	      printf(" %08x TRM Chain-B Header    (SlotID=%d, BunchID=%d) \n", *mPointer, SlotID, BunchID);
 	    }
 #endif
 	    next32();
@@ -496,7 +465,7 @@ namespace raw {
 		auto ihit = mSummary.nTDCUnpackedHits[itrm][ichain][itdc];
 		mSummary.TDCUnpackedHit[itrm][ichain][itdc][ihit] = *mPointer;
 		mSummary.nTDCUnpackedHits[itrm][ichain][itdc]++;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 		if (mVerbose) {
 		  auto TDCUnpackedHit = reinterpret_cast<TDCUnpackedHit_t *>(mPointer);
 		  auto HitTime = TDCUnpackedHit->HitTime;
@@ -504,8 +473,7 @@ namespace raw {
 		  auto TDCID = TDCUnpackedHit->TDCID;
 		  auto EBit = TDCUnpackedHit->EBit;
 		  auto PSBits = TDCUnpackedHit->PSBits;
-		  fmt = boost::format("TDC Hit               (HitTime=%d, Chan=%d, TDCID=%d, EBit=%d, PSBits=%d") % HitTime % Chan % TDCID % EBit % PSBits;
-		  print(fmt.str());
+		  printf(" %08x TDC Hit               (HitTime=%d, Chan=%d, TDCID=%d, EBit=%d, PSBits=%d \n", *mPointer, HitTime, Chan, TDCID, EBit, PSBits);
 		}
 #endif
 		next32();
@@ -514,9 +482,9 @@ namespace raw {
 	      
 	      /** TDC error detected **/
 	      if (IS_TDC_ERROR(*mPointer)) {
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 		if (mVerbose) {
-		  print("TDC error");
+		  printf(" %08x TDC error \n", *mPointer);
 		}
 #endif
 		next32();
@@ -526,21 +494,20 @@ namespace raw {
 	      /** TRM chain-B trailer detected **/
 	      if (IS_TRM_CHAINB_TRAILER(*mPointer)) {
 		mSummary.TRMChainTrailer[itrm][ichain] = *mPointer;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 		if (mVerbose) {
 		  auto TRMChainTrailer = reinterpret_cast<TRMChainTrailer_t *>(mPointer);
 		  auto EventCounter = TRMChainTrailer->EventCounter;
-		  fmt = boost::format("TRM Chain-B Trailer   (SlotID=%d, EventCounter=%d)") % SlotID % EventCounter;
-		  print(fmt.str());
+		  printf(" %08x TRM Chain-B Trailer   (SlotID=%d, EventCounter=%d) \n", *mPointer, SlotID, EventCounter);
 		}
 #endif
 		next32();
 		break;
 	      }
 	      
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 	      if (mVerbose) {
-		print("[ERROR] breaking TRM Chain-B decode stream");
+		printf(" %08x [ERROR] breaking TRM Chain-B decode stream \n", *mPointer);
 	      }
 #endif
 	      next32();
@@ -551,22 +518,21 @@ namespace raw {
 	  /** TRM global trailer detected **/
 	  if (IS_TRM_GLOBAL_TRAILER(*mPointer)) {
 	    mSummary.TRMGlobalTrailer[itrm] = *mPointer;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 	    if (mVerbose) {
 	      auto TRMGlobalTrailer = reinterpret_cast<TRMGlobalTrailer_t *>(mPointer);
 	      auto EventCRC = TRMGlobalTrailer->EventCRC;
 	      auto LBit = TRMGlobalTrailer->LBit;
-	      fmt = boost::format("TRM Global Trailer    (SlotID=%d, EventCRC=%d, LBit=%d)") % SlotID % EventCRC % LBit;
-	      print(fmt.str());
+	      printf(" %08x TRM Global Trailer    (SlotID=%d, EventCRC=%d, LBit=%d) \n", *mPointer, SlotID, EventCRC, LBit);
 	    }
 #endif
 	    next32();
 	    
  	    /** filler detected **/
 	    if (IS_FILLER(*mPointer)) {
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 	      if (mVerbose) {
-		print("Filler");
+		printf(" %08x Filler \n", *mPointer);
 	      }
 #endif
 	      next32();
@@ -575,9 +541,9 @@ namespace raw {
 	    break;
 	  }
 	  
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 	  if (mVerbose) {
-	    print("[ERROR] breaking TRM decode stream");
+	    printf(" %08x [ERROR] breaking TRM decode stream \n", *mPointer);
 	  }
 #endif
 	  next32();
@@ -591,21 +557,20 @@ namespace raw {
       /** DRM global trailer detected **/
       if (IS_DRM_GLOBAL_TRAILER(*mPointer)) {
 	mSummary.DRMGlobalTrailer = *mPointer;
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 	if (mVerbose) {
 	  auto DRMGlobalTrailer = reinterpret_cast<DRMGlobalTrailer_t *>(mPointer);
 	  auto LocalEventCounter = DRMGlobalTrailer->LocalEventCounter;
-	  fmt = boost::format("DRM Global Trailer    (LocalEventCounter=%d)") % LocalEventCounter;
-	  print(fmt.str());
+	  printf(" %08x DRM Global Trailer    (LocalEventCounter=%d) \n", *mPointer, LocalEventCounter);
 	}
 #endif
 	next32();
 	
 	/** filler detected **/
 	if (IS_FILLER(*mPointer)) {
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 	  if (mVerbose) {
-	    print("Filler");
+	    printf(" %08x Filler \n", *mPointer);
 	  }
 #endif
 	  next32();
@@ -614,9 +579,9 @@ namespace raw {
 	break;
       }
       
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
       if (mVerbose) {
-	print("[ERROR] trying to recover DRM decode stream");
+	printf(" %08x [ERROR] trying to recover DRM decode stream \n", *mPointer);
       }
 #endif
       next32();
@@ -629,7 +594,7 @@ namespace raw {
     mIntegratedBytes += mByteCounter;
     mIntegratedTime += elapsed.count();
     
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose) {
       std::cout << "-------- END DECODE EVENT ------------------------------------------"
 		<< " | " << mByteCounter << " bytes"

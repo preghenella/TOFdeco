@@ -1,7 +1,6 @@
 #include "Checker.h"
 #include <iostream>
 #include <chrono>
-#include <boost/format.hpp>
 
 namespace tof {
 namespace data {
@@ -15,11 +14,7 @@ namespace raw {
     auto start = std::chrono::high_resolution_clock::now();
 
     
-#ifdef VERBOSE
-    boost::format fmt;
-#endif
-
-#ifdef VERBOSE
+#ifdef CHECK_VERBOSE
     if (mVerbose) {
       std::cout << "-------- START CHECK EVENT -----------------------------------------" << std::endl;    
     }
@@ -29,10 +24,9 @@ namespace raw {
     if (summary.DRMGlobalHeader == 0x0) {
       status = true;
       summary.faultFlags |= 1;
-#ifdef VERBOSE
+#ifdef CHECK_VERBOSE
       if (mVerbose) {
-	fmt = boost::format("Missing DRM Global Header");
-	std::cout << fmt << std::endl;
+	printf(" Missing DRM Global Header \n");
       }
 #endif
       return status;
@@ -42,10 +36,9 @@ namespace raw {
     if (summary.DRMGlobalTrailer == 0x0) {
       status = true;
       summary.faultFlags |= 1;
-#ifdef VERBOSE
+#ifdef CHECK_VERBOSE
       if (mVerbose) {
-	fmt = boost::format("Missing DRM Global Trailer");
-	std::cout << fmt << std::endl;
+	printf(" Missing DRM Global Trailer \n");
       }
 #endif
       return status;
@@ -58,10 +51,9 @@ namespace raw {
     uint32_t LocalEventCounter   = GET_DRM_LOCALEVENTCOUNTER(summary.DRMGlobalTrailer);
     
     if (ParticipatingSlotID != SlotEnableMask) {
-#ifdef VERBOSE
+#ifdef CHECK_VERBOSE
       if (mVerbose) {
-	fmt = boost::format("Warning: enable/participating mask differ: %03x/%03x") % SlotEnableMask % ParticipatingSlotID;
-	std::cout << fmt << std::endl;
+	printf(" Warning: enable/participating mask differ: %03x/%03x \n", SlotEnableMask, ParticipatingSlotID);
       }
 #endif
     }
@@ -75,9 +67,9 @@ namespace raw {
       if (!(ParticipatingSlotID & 1 << (itrm + 1))) {
 	if (summary.TRMGlobalHeader[itrm] != 0x0) {
 	  status = true;
-#ifdef VERBOSE
+#ifdef CHECK_VERBOSE
 	if (mVerbose) {
-	  printf("trm%02d: non-participating header found \n", SlotID);	
+	  printf(" Non-participating header found (SlotID=%d) \n", SlotID);	
 	}
 #endif
 	}
@@ -89,10 +81,9 @@ namespace raw {
       if (summary.TRMGlobalHeader[itrm] == 0x0) {
 	status = true;
 	summary.faultFlags |= trmFaultBit;
-#ifdef VERBOSE
+#ifdef CHECK_VERBOSE
 	if (mVerbose) {
-	  fmt = boost::format("Missing TRM Header (SlotID=%d)") % SlotID;
-	  std::cout << fmt << std::endl;
+	  printf(" Missing TRM Header (SlotID=%d) \n", SlotID);
 	}
 #endif
 	continue;
@@ -102,10 +93,9 @@ namespace raw {
       if (summary.TRMGlobalTrailer[itrm] == 0x0) {
 	status = true;
 	summary.faultFlags |= trmFaultBit;
-#ifdef VERBOSE
+#ifdef CHECK_VERBOSE
 	if (mVerbose) {
-	  fmt = boost::format("Missing TRM Trailer (SlotID=%d)") % SlotID;
-	  std::cout << fmt << std::endl;
+	  printf(" Missing TRM Trailer (SlotID=%d) \n", SlotID);
 	}
 #endif
 	continue;
@@ -116,10 +106,9 @@ namespace raw {
       if (EventCounter != LocalEventCounter % 1024) {
 	status = true;
 	summary.faultFlags |= trmFaultBit;
-#ifdef VERBOSE
+#ifdef CHECK_VERBOSE
 	if (mVerbose) {
-	  fmt = boost::format("TRM EventCounter / DRM LocalEventCounter mismatch: %d / %d (SlotID=%d)") % EventCounter % LocalEventCounter % SlotID;
-	  std::cout << fmt << std::endl;
+	  printf(" TRM EventCounter / DRM LocalEventCounter mismatch: %d / %d (SlotID=%d) \n", EventCounter, LocalEventCounter, SlotID);
 	}
 #endif
 	continue;
@@ -133,10 +122,9 @@ namespace raw {
 	if (summary.TRMChainHeader[itrm][ichain] == 0x0) {
 	  status = true;
 	  summary.faultFlags |= chainFaultBit;
-#ifdef VERBOSE
+#ifdef CHECK_VERBOSE
 	  if (mVerbose) {
-	    fmt = boost::format("Missing TRM Chain Header (SlotID=%d, chain=%d)") % SlotID % ichain;
-	    std::cout << fmt << std::endl;
+	    printf(" Missing TRM Chain Header (SlotID=%d, chain=%d) \n", SlotID, ichain);
 	  }
 #endif
 	  continue;
@@ -146,10 +134,9 @@ namespace raw {
 	if (summary.TRMChainTrailer[itrm][ichain] == 0x0) {
 	  status = true;
 	  summary.faultFlags |= chainFaultBit;
-#ifdef VERBOSE
+#ifdef CHECK_VERBOSE
 	  if (mVerbose) {
-	    fmt = boost::format("Missing TRM Chain Trailer (SlotID=%d, chain=%d)") % SlotID % ichain;
-	    std::cout << fmt << std::endl;
+	    printf(" Missing TRM Chain Trailer (SlotID=%d, chain=%d) \n", SlotID, ichain);
 	  }
 #endif
 	  continue;
@@ -160,10 +147,9 @@ namespace raw {
 	if (EventCounter != LocalEventCounter) {
 	  status = true;
 	  summary.faultFlags |= chainFaultBit;
-#ifdef VERBOSE
+#ifdef CHECK_VERBOSE
 	  if (mVerbose) {
-	    fmt = boost::format("TRM Chain EventCounter / DRM LocalEventCounter mismatch: %d / %d (SlotID=%d, chain=%d)") % EventCounter % EventCounter % SlotID % ichain;
-	    std::cout << fmt << std::endl;
+	    printf(" TRM Chain EventCounter / DRM LocalEventCounter mismatch: %d / %d (SlotID=%d, chain=%d) \n", EventCounter, EventCounter, SlotID, ichain);
 	  }
 #endif
 	  continue;
@@ -174,10 +160,9 @@ namespace raw {
 	if (Status != 0) {
 	  status = true;
 	  summary.faultFlags |= chainFaultBit;
-#ifdef VERBOSE
+#ifdef CHECK_VERBOSE
 	  if (mVerbose) {
-	    fmt = boost::format("TRM Chain bad Status: %d (SlotID=%d, chain=%d)") % Status % SlotID % ichain;
-	    std::cout << fmt << std::endl;
+	    printf(" TRM Chain bad Status: %d (SlotID=%d, chain=%d) \n", Status, SlotID, ichain);
 	  }
 #endif	  
 	}
@@ -187,10 +172,9 @@ namespace raw {
 	if (BunchID != L0BCID) {
 	  status = true;
 	  summary.faultFlags |= chainFaultBit;
-#ifdef VERBOSE
+#ifdef CHECK_VERBOSE
 	  if (mVerbose) {
-	    fmt = boost::format("TRM Chain BunchID / DRM L0BCID mismatch: %d / %d (SlotID=%d, chain=%d)") % BunchID % L0BCID % SlotID % ichain;
-	    std::cout << fmt << std::endl;
+	    printf(" TRM Chain BunchID / DRM L0BCID mismatch: %d / %d (SlotID=%d, chain=%d) \n", BunchID, L0BCID, SlotID, ichain);
 	  }
 #endif	  
 	}

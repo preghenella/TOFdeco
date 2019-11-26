@@ -32,7 +32,6 @@ namespace compressed {
   protected:
 
     void clear();
-    void print(std::string what);
 
     std::ifstream mFile;
     char *mBuffer;

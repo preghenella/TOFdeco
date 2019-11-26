@@ -1,7 +1,6 @@
 #include "Encoder.h"
 #include <iostream>
 #include <chrono>
-#include <boost/format.hpp>
 
 namespace tof {
 namespace data {
@@ -25,7 +24,7 @@ namespace compressed {
   bool
   Encoder::flush()
   {
-#ifdef VERBOSE
+#ifdef ENCODE_VERBOSE
     if (mVerbose) {
       std::cout << "-------- FLUSH ENCODER BUFFER --------------------------------------"
 		<< " | " << mByteCounter << " bytes"
@@ -49,7 +48,7 @@ namespace compressed {
   bool
   Encoder::init()
   {
-#ifdef VERBOSE
+#ifdef ENCODE_VERBOSE
     if (mVerbose) {
       std::cout << "-------- INITIALISE ENCODER BUFFER ---------------------------------"
 		<< " | " << mSize << " bytes"
@@ -77,7 +76,7 @@ namespace compressed {
   Encoder::encode(const tof::data::raw::Summary_t &summary)
   {
 
-#ifdef VERBOSE
+#ifdef ENCODE_VERBOSE
     if (mVerbose) {
       std::cout << "-------- START ENCODE EVENT ----------------------------------------" << std::endl;
     }
@@ -91,28 +90,24 @@ namespace compressed {
     *mPointer |= GET_DRM_DRMID(summary.DRMGlobalHeader) << 24;
     *mPointer |= GET_DRM_LOCALEVENTCOUNTER(summary.DRMGlobalTrailer) << 12;
     *mPointer |= GET_DRM_L0BCID(summary.DRMStatusHeader3);
-#ifdef VERBOSE
+#ifdef ENCODE_VERBOSE
     if (mVerbose) {
       auto CrateHeader = reinterpret_cast<CrateHeader_t *>(mPointer);
       auto BunchID = CrateHeader->BunchID;
       auto EventCounter = CrateHeader->EventCounter;
       auto DRMID = CrateHeader->DRMID;
-      std::cout << boost::format("%08x") % *mPointer << " "
-		<< boost::format("Crate header          (DRMID=%d, EventCounter=%d, BunchID=%d)") % DRMID % EventCounter % BunchID
-		<< std::endl;
+      printf(" %08x Crate header          (DRMID=%d, EventCounter=%d, BunchID=%d) \n", *mPointer, DRMID, EventCounter, BunchID);
     }
 #endif
     next32();
     
     // crate orbit
     *mPointer = summary.DRMOrbitHeader;
-#ifdef VERBOSE
+#ifdef ENCODE_VERBOSE
     if (mVerbose) {
       auto CrateOrbit = reinterpret_cast<CrateOrbit_t *>(mPointer);
       auto OrbitID = CrateOrbit->OrbitID;
-      std::cout << boost::format("%08x") % *mPointer << " "
-		<< boost::format("Crate orbit           (OrbitID=%d)") % OrbitID
-		<< std::endl;
+      printf(" %08x Crate orbit           (OrbitID=%d) \n", *mPointer, OrbitID);
     }
 #endif
     next32();
@@ -195,15 +190,13 @@ namespace compressed {
 	*mPointer |= (itrm + 3) << 24;
 	*mPointer |= iframe << 16;
         *mPointer |= nPackedHits[iframe];
-#ifdef VERBOSE
+#ifdef ENCODE_VERBOSE
 	if (mVerbose) {
 	  auto FrameHeader = reinterpret_cast<FrameHeader_t *>(mPointer);
 	  auto NumberOfHits = FrameHeader->NumberOfHits;
 	  auto FrameID = FrameHeader->FrameID;
 	  auto TRMID = FrameHeader->TRMID;
-	  std::cout << boost::format("%08x") % *mPointer << " "
-		    << boost::format("Frame header          (TRMID=%d, FrameID=%d, NumberOfHits=%d)") % TRMID % FrameID % NumberOfHits
-		    << std::endl;
+	  printf(" %08x Frame header          (TRMID=%d, FrameID=%d, NumberOfHits=%d) \n", *mPointer, TRMID, FrameID, NumberOfHits);
 	}
 #endif
 	next32();
@@ -211,7 +204,7 @@ namespace compressed {
 	// packed hits
         for (int ihit = 0; ihit < nPackedHits[iframe]; ++ihit) {
 	  *mPointer = PackedHit[iframe][ihit];
-#ifdef VERBOSE
+#ifdef ENCODE_VERBOSE
 	  if (mVerbose) {
 	    auto PackedHit = reinterpret_cast<PackedHit_t *>(mPointer);
             auto Chain = PackedHit->Chain;
@@ -219,9 +212,7 @@ namespace compressed {
             auto Channel = PackedHit->Channel;
             auto Time = PackedHit->Time;
             auto TOT = PackedHit->TOT;
-            std::cout << boost::format("%08x") % *mPointer << " "
-                      << boost::format("Packed hit            (Chain=%d, TDCID=%d, Channel=%d, Time=%d, TOT=%d)") % Chain % TDCID % Channel % Time % TOT
-                      << std::endl;
+            printf(" %08x Packed hit            (Chain=%d, TDCID=%d, Channel=%d, Time=%d, TOT=%d) \n", *mPointer, Chain, TDCID, Channel, Time, TOT);
           }
 #endif
 	  next32();
@@ -233,7 +224,7 @@ namespace compressed {
 
     // crate trailer
     *mPointer = 0x80000000 | summary.faultFlags;
-#ifdef VERBOSE
+#ifdef ENCODE_VERBOSE
     if (mVerbose) {
       auto CrateTrailer = reinterpret_cast<CrateTrailer_t *>(mPointer);
       auto CrateFault = CrateTrailer->CrateFault;
@@ -247,9 +238,8 @@ namespace compressed {
       auto TRMFault10 = CrateTrailer->TRMFault10;
       auto TRMFault11 = CrateTrailer->TRMFault11;
       auto TRMFault12 = CrateTrailer->TRMFault12;
-      std::cout << boost::format("%08x") % *mPointer << " "
-		<< boost::format("Crate trailer         (CrateFault=%d TRMFault[3-12]=0x[%x,%x,%x,%x,%x,%x,%x,%x,%x,%x])") % CrateFault % TRMFault03 % TRMFault04 % TRMFault05 % TRMFault06 % TRMFault07 % TRMFault08 % TRMFault09 % TRMFault10 % TRMFault11 % TRMFault12
-		<< std::endl;
+      printf(" %08x Crate trailer         (CrateFault=%d TRMFault[3-12]=0x[%x,%x,%x,%x,%x,%x,%x,%x,%x,%x]) \n", *mPointer,
+	     CrateFault, TRMFault03, TRMFault04, TRMFault05, TRMFault06, TRMFault07, TRMFault08, TRMFault09, TRMFault10, TRMFault11, TRMFault12);
     }
 #endif
     next32();
@@ -261,7 +251,7 @@ namespace compressed {
     mIntegratedBytes += mByteCounter;
     mIntegratedTime += elapsed.count();
     
-#ifdef VERBOSE
+#ifdef ENCODE_VERBOSE
     if (mVerbose) {
       std::cout << "-------- END ENCODE EVENT ------------------------------------------"
 		<< " | " << mByteCounter << " bytes"

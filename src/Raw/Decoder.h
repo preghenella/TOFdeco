@@ -38,8 +38,6 @@ namespace raw {
   protected:
 
     void clear();
-    void print(std::string what);
-    void printRDH(std::string what);
 
     inline void next128();
     inline void next32();

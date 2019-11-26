@@ -1,5 +1,15 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/. ${Boost_INCLUDE_DIR})
 
+if (ENABLE_DECODE_VERBOSE OR ENABLE_VERBOSE)
+   add_definitions(-DDECODE_VERBOSE)
+endif()
+if (ENABLE_CHECK_VERBOSE OR ENABLE_VERBOSE)
+   add_definitions(-DCHECK_VERBOSE)
+endif()
+if (ENABLE_ENCODE_VERBOSE OR ENABLE_VERBOSE)
+   add_definitions(-DENCODE_VERBOSE)
+endif()
+
 add_subdirectory(Raw)
 add_subdirectory(Compressed)
 add_subdirectory(Utils)
