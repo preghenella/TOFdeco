@@ -80,11 +80,13 @@ int main(int argc, char **argv)
       if (checker.check(decoder.getSummary())) {
 	decoder.rewind();
 	decoder.setVerbose(true);
+	checker.setVerbose(true);
 	decoder.decodeRDH();
 	while (!decoder.decode())
 	  if (checker.check(decoder.getSummary()))
 	    getchar();
 	decoder.setVerbose(verbose);
+	checker.setVerbose(verbose);
       }
       
       /** encode **/
