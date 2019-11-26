@@ -2,6 +2,10 @@ add_executable(raw_decoder raw_decoder.cxx)
 target_link_libraries(raw_decoder TOFdataRaw ${Boost_PROGRAM_OPTIONS_LIBRARY})
 install(TARGETS raw_decoder RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/bin)
 
+add_executable(raw_checker raw_checker.cxx)
+target_link_libraries(raw_checker TOFdataRaw ${Boost_PROGRAM_OPTIONS_LIBRARY})
+install(TARGETS raw_checker RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/bin)
+
 add_executable(raw_adder raw_adder.cxx)
 target_link_libraries(raw_adder ${Boost_PROGRAM_OPTIONS_LIBRARY})
 install(TARGETS raw_adder RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/bin)
@@ -23,6 +27,8 @@ target_link_libraries(compressed_decoder TOFdataCompressed ${Boost_PROGRAM_OPTIO
 install(TARGETS compressed_decoder RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/bin)
 
 
+if(HISTOGRAMMER)
+
 find_package(ROOT)
 include_directories(${ROOT_INCLUDE_DIRS})
 
@@ -34,3 +40,4 @@ add_executable(compressed_histogrammer compressed_histogrammer.cxx)
 target_link_libraries(compressed_histogrammer TOFdataCompressed ${Boost_PROGRAM_OPTIONS_LIBRARY} ${ROOT_LIBRARIES})
 install(TARGETS compressed_histogrammer RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/bin)
 
+endif()
