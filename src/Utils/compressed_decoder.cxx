@@ -52,7 +52,7 @@ int main(int argc, char **argv)
   
   decoder.close();
   
-  std::cout << " benchmark: decoded " << 1.e-6 * decoder.mIntegratedBytes << " MB in " << decoder.mIntegratedTime << " s"
+  std::cout << " benchmark: decoded " << decoder.mIntegratedBytes << " bytes in " << decoder.mIntegratedTime << " s"
 	    << " | " << 1.e-6 * decoder.mIntegratedBytes / decoder.mIntegratedTime << " MB/s"
 	    << std::endl;
   

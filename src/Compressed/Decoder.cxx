@@ -1,9 +1,6 @@
 #include "Decoder.h"
 #include <iostream>
 #include <chrono>
-#include <boost/format.hpp>
-
-#define VERBOSE
 
 namespace tof {
 namespace data {
@@ -46,69 +43,75 @@ namespace compressed {
     return false;
   }
 
-  void
-  Decoder::print(std::string what)
-  {
-    if (mVerbose)
-      std::cout << boost::format("%08x") % mUnion->Data << " " << what << std::endl;
-  }
-  
   bool
   Decoder::next()
   {
     if (((char *)mUnion - mBuffer) >= mSize) return true;
     if (mUnion->Word.WordType != 1) {
-      print("[ERROR]");
+      printf(" %08x [ERROR] \n", mUnion->Data);
       return true;
     }    
     return false;
+  }
+
+  void
+  Decoder::clear()
+  {
+    mSummary.CrateHeader  = {0x0};
+    mSummary.CrateOrbit   = {0x0};
+    mSummary.CrateTrailer  = {0x0};
+    mSummary.nHits = 0;
   }
   
   bool
   Decoder::decode()
   {
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
     if (mVerbose)
       std::cout << "-------- START DECODE EVENT ----------------------------------------" << std::endl;
 #endif
     auto start = std::chrono::high_resolution_clock::now();
 
-    unsigned int nWords = 1;
+    clear();
+    mByteCounter = 0;
 
+    mSummary.CrateHeader = mUnion->CrateHeader;
+#ifdef DECODE_VERBOSE
     auto BunchID = mUnion->CrateHeader.BunchID;
     auto EventCounter = mUnion->CrateHeader.EventCounter;
     auto DRMID = mUnion->CrateHeader.DRMID;
-#ifdef VERBOSE
-    print(str(boost::format("Crate header (DRMID=%d, EventCounter=%d, BunchID=%d)") % DRMID % EventCounter % BunchID));
+    printf(" %08x Crate header (DRMID=%d, EventCounter=%d, BunchID=%d) \n", mUnion->Data, DRMID, EventCounter, BunchID);
 #endif
-    mUnion++; nWords++;
+    mUnion++; mByteCounter += 4;
 
+    mSummary.CrateOrbit = mUnion->CrateOrbit;
+#ifdef DECODE_VERBOSE
     auto OrbitID = mUnion->CrateOrbit.OrbitID;
-#ifdef VERBOSE
-    print(str(boost::format("Crate orbit (OrbitID=%d)") % OrbitID));
+    printf(" %08x Crate orbit (OrbitID=%d) \n", mUnion->Data, OrbitID);
 #endif
-    mUnion++; nWords++;
+    mUnion++; mByteCounter += 4;
 
     /** loop over Crate payload **/
     while (true) {
       
       /** Crate trailer detected **/
       if (mUnion->Word.WordType == 1) {
-#ifdef VERBOSE
-	print("Crate trailer");
+	mSummary.CrateTrailer = mUnion->CrateTrailer;
+#ifdef DECODE_VERBOSE
+	printf(" %08x Crate trailer \n", mUnion->Data);
 #endif
-	mUnion++; nWords++;
+	mUnion++; mByteCounter += 4;
 	
 	auto finish = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double> elapsed = finish - start;
 	
-	mIntegratedBytes += nWords * 4;
+	mIntegratedBytes += mByteCounter;
 	mIntegratedTime += elapsed.count();
 	
-#ifdef VERBOSE
+#ifdef DECODE_VERBOSE
 	if (mVerbose)
 	  std::cout << "-------- END DECODE EVENT ------------------------------------------"
-		    << " | " << nWords << " words"
+		    << " | " << mByteCounter << " bytes"
 		    << " | " << 1.e3  * elapsed.count() << " ms"
 		    << " | " << 1.e-6 * mIntegratedBytes / mIntegratedTime << " MB/s (average)"
 		    << std::endl;
@@ -119,16 +122,27 @@ namespace compressed {
 
       /** Frame header detected **/
       auto NumberOfHits = mUnion->FrameHeader.NumberOfHits;
-      auto FrameID = mUnion->FrameHeader.FrameID;
+      auto FrameHeader = mUnion->FrameHeader;
+#ifdef DECODE_VERBOSE
       auto TRMID = mUnion->FrameHeader.TRMID;
-#ifdef VERBOSE
-      print(str(boost::format("Frame header (TRMID=%d, FrameID=%d, NumberOfHits=%d)") % TRMID % FrameID % NumberOfHits));
+      auto FrameID = mUnion->FrameHeader.FrameID;
+      printf(" %08x Frame header (TRMID=%d, FrameID=%d, NumberOfHits=%d) \n", mUnion->Data, TRMID, FrameID, NumberOfHits);
 #endif
-      mUnion++; nWords++;
+      mUnion++; mByteCounter += 4;
       /** loop over frame payload **/
       for (int ihit = 0; ihit < NumberOfHits; ihit++) {
-	print("Packed hit");
-	mUnion++; nWords++;
+	mSummary.FrameHeader[mSummary.nHits] = FrameHeader;
+	mSummary.PackedHit[mSummary.nHits] = mUnion->PackedHit;
+	mSummary.nHits++;
+#ifdef DECODE_VERBOSE
+	auto Chain = mUnion->PackedHit.Chain;
+	auto TDCID = mUnion->PackedHit.TDCID;
+	auto Channel = mUnion->PackedHit.Channel;
+	auto Time = mUnion->PackedHit.Time;
+	auto TOT = mUnion->PackedHit.TOT;
+	printf(" %08x Packed hit (Chain=%d, TDCID=%d, Channel=%d, Time=%d, TOT=%d) \n", mUnion->Data, Chain, TDCID, Channel, Time, TOT);
+#endif
+	mUnion++; mByteCounter += 4;
       }
       
     }

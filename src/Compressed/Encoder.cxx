@@ -1,7 +1,6 @@
 #include "Encoder.h"
 #include <iostream>
 #include <chrono>
-#include <boost/format.hpp>
 
 namespace tof {
 namespace data {
@@ -25,7 +24,16 @@ namespace compressed {
   bool
   Encoder::flush()
   {
-    mFile.write(mBuffer, mIntegratedBytes);
+#ifdef ENCODE_VERBOSE
+    if (mVerbose) {
+      std::cout << "-------- FLUSH ENCODER BUFFER --------------------------------------"
+		<< " | " << mByteCounter << " bytes"
+		<< std::endl;
+    }
+#endif
+    mFile.write(mBuffer, mOutputByteCounter);
+    mPointer = (uint32_t *)mBuffer;
+    mOutputByteCounter = 0;
     return false;
   }
   
@@ -38,135 +46,176 @@ namespace compressed {
   }
   
   bool
-  Encoder::alloc(long size)
+  Encoder::init()
   {
-    mSize = size;
+#ifdef ENCODE_VERBOSE
+    if (mVerbose) {
+      std::cout << "-------- INITIALISE ENCODER BUFFER ---------------------------------"
+		<< " | " << mSize << " bytes"
+		<< std::endl;
+    }
+#endif
+    if (mBuffer) {
+      std::cout << "Warning: a buffer was already allocated, cleaning" << std::endl;
+      delete [] mBuffer;
+    }
     mBuffer = new char[mSize];
-    mUnion = reinterpret_cast<Union_t *>(mBuffer);
+    mPointer = (uint32_t *)mBuffer;
+    mOutputByteCounter = 0;
     return false;
   }
   
+  void
+  Encoder::next32()
+  {
+    mPointer++;
+    mByteCounter += 4;
+  }
+
   bool
   Encoder::encode(const tof::data::raw::Summary_t &summary)
   {
 
-#ifdef VERBOSE
-    if (mVerbose)
+#ifdef ENCODE_VERBOSE
+    if (mVerbose) {
       std::cout << "-------- START ENCODE EVENT ----------------------------------------" << std::endl;
+    }
 #endif
     auto start = std::chrono::high_resolution_clock::now();	
-    
-    unsigned int nWords = 0;
+
+    mByteCounter = 0;
 
     // crate header
-    mUnion->CrateHeader = {0x0};
-    mUnion->CrateHeader.MustBeOne = 1;
-    mUnion->CrateHeader.DRMID = summary.DRMGlobalHeader.DRMID;
-    mUnion->CrateHeader.EventCounter = summary.DRMGlobalTrailer.LocalEventCounter;
-    mUnion->CrateHeader.BunchID = summary.DRMStatusHeader3.L0BCID;
-#ifdef VERBOSE
+    *mPointer  = 0x80000000;
+    *mPointer |= GET_DRM_DRMID(summary.DRMGlobalHeader) << 24;
+    *mPointer |= GET_DRM_LOCALEVENTCOUNTER(summary.DRMGlobalTrailer) << 12;
+    *mPointer |= GET_DRM_L0BCID(summary.DRMStatusHeader3);
+#ifdef ENCODE_VERBOSE
     if (mVerbose) {
-      auto BunchID = mUnion->CrateHeader.BunchID;
-      auto EventCounter = mUnion->CrateHeader.EventCounter;
-      auto DRMID = mUnion->CrateHeader.DRMID;
-      std::cout << boost::format("%08x") % mUnion->Data
-      		<< " "
-		<< boost::format("Crate header (DRMID=%d, EventCounter=%d, BunchID=%d)") % DRMID % EventCounter % BunchID
-		<< std::endl;
+      auto CrateHeader = reinterpret_cast<CrateHeader_t *>(mPointer);
+      auto BunchID = CrateHeader->BunchID;
+      auto EventCounter = CrateHeader->EventCounter;
+      auto DRMID = CrateHeader->DRMID;
+      printf(" %08x Crate header          (DRMID=%d, EventCounter=%d, BunchID=%d) \n", *mPointer, DRMID, EventCounter, BunchID);
     }
 #endif
-    mUnion++; nWords++;
+    next32();
     
     // crate orbit
-    mUnion->CrateOrbit = {0x0};
-#ifdef VERBOSE
+    *mPointer = summary.DRMOrbitHeader;
+#ifdef ENCODE_VERBOSE
     if (mVerbose) {
-      auto OrbitID = mUnion->CrateOrbit.OrbitID;
-      std::cout << boost::format("%08x") % mUnion->Data
-      		<< " "
-		<< boost::format("Crate orbit (OrbitID=%d)") % BunchID
-		<< std::endl;
+      auto CrateOrbit = reinterpret_cast<CrateOrbit_t *>(mPointer);
+      auto OrbitID = CrateOrbit->OrbitID;
+      printf(" %08x Crate orbit           (OrbitID=%d) \n", *mPointer, OrbitID);
     }
 #endif
-    mUnion++; nWords++;
+    next32();
     
     /** loop over TRMs **/
 
-    unsigned char nPackedHits[256] = {0};
-    PackedHit_t PackedHit[256][256];
+    uint8_t  nPackedHits[256] = {0};
+    uint32_t PackedHit[256][256];
     for (int itrm = 0; itrm < 10; itrm++) {
 
       /** check if TRM is empty **/
-      if (summary.nTRMSpiderHits[itrm] == 0)
-	continue;
+      if (summary.TRMempty[itrm]) continue;
 
-      unsigned char firstFilledFrame = 255;
-      unsigned char lastFilledFrame = 0;
+      uint8_t firstFilledFrame = 255;
+      uint8_t lastFilledFrame = 0;
 
-      /** loop over hits **/
-      for (int ihit = 0; ihit < summary.nTRMSpiderHits[itrm]; ++ihit) {
+      /** SPIDER **/
+      
+      /** loop over TRM chains **/
+      for (int ichain = 0; ichain < 2; ++ichain) {
 	
-	auto hit = summary.TRMSpiderHit[itrm][ihit];
-	auto iframe = hit.HitTime >> 13;
-	auto phit = nPackedHits[iframe];
-	PackedHit[iframe][phit].Chain = hit.Chain;
-	PackedHit[iframe][phit].TDCID = hit.TDCID;
-	PackedHit[iframe][phit].Channel = hit.Chan;
-	PackedHit[iframe][phit].Time = hit.HitTime;
-	PackedHit[iframe][phit].TOT = hit.TOTWidth;
-	nPackedHits[iframe]++;
-	
-	if (iframe < firstFilledFrame)
-	  firstFilledFrame = iframe;
-	if (iframe > lastFilledFrame)
-	  lastFilledFrame = iframe;
+	/** loop over TDCs **/
+	for (int itdc = 0; itdc < 15; ++itdc) {
+	  
+          auto nhits = summary.nTDCUnpackedHits[itrm][ichain][itdc];
+          if (nhits == 0)
+            continue;
+
+          /** loop over hits **/
+          for (int ihit = 0; ihit < nhits; ++ihit) {
+
+            auto lhit = summary.TDCUnpackedHit[itrm][ichain][itdc][ihit];
+            if (GET_TDCHIT_PSBITS(lhit) != 0x1)
+              continue; // must be a leading hit
+
+	    auto Chan = GET_TDCHIT_CHAN(lhit);
+	    auto HitTime = GET_TDCHIT_HITTIME(lhit);
+	    auto EBit = GET_TDCHIT_EBIT(lhit);
+            uint32_t TOTWidth = 0;
+	    
+            // check next hits for packing
+            for (int jhit = ihit + 1; jhit < nhits; ++jhit) {
+              auto thit = summary.TDCUnpackedHit[itrm][ichain][itdc][jhit];
+              if (GET_TDCHIT_PSBITS(thit) == 0x2 && GET_TDCHIT_CHAN(thit) == Chan) { // must be a trailing hit from same channel
+                TOTWidth = GET_TDCHIT_HITTIME(thit) - HitTime; // compute TOT
+                lhit = 0x0; // mark as used
+                break;
+              }
+            }
+
+	    auto iframe = HitTime >> 13;
+	    auto phit = nPackedHits[iframe];
+
+	    PackedHit[iframe][phit]  = 0x00000000;
+	    PackedHit[iframe][phit] |= TOTWidth;
+	    PackedHit[iframe][phit] |= HitTime << 11;
+	    PackedHit[iframe][phit] |= Chan << 24;
+	    PackedHit[iframe][phit] |= itdc << 27;
+	    PackedHit[iframe][phit] |= ichain << 31;
+	    nPackedHits[iframe]++;
+	    
+	    if (iframe < firstFilledFrame)
+	      firstFilledFrame = iframe;
+	    if (iframe > lastFilledFrame)
+	      lastFilledFrame = iframe;
+	    
+	  }
+	}
       }
-        
+            
       /** loop over frames **/
-      for (int iframe = firstFilledFrame; iframe < lastFilledFrame + 1;
-           iframe++) {
+      for (int iframe = firstFilledFrame; iframe < lastFilledFrame + 1; iframe++) {
 
         /** check if frame is empty **/
         if (nPackedHits[iframe] == 0)
           continue;
 
         // frame header
-	mUnion->FrameHeader = {0x0};
-	mUnion->FrameHeader.MustBeZero = 0;
-	mUnion->FrameHeader.TRMID = itrm + 3;
-	mUnion->FrameHeader.FrameID = iframe;
-        mUnion->FrameHeader.NumberOfHits = nPackedHits[iframe];
-#ifdef VERBOSE
+	*mPointer  = 0x00000000;
+	*mPointer |= (itrm + 3) << 24;
+	*mPointer |= iframe << 16;
+        *mPointer |= nPackedHits[iframe];
+#ifdef ENCODE_VERBOSE
 	if (mVerbose) {
-	  auto NumberOfHits = mUnion->FrameHeader.NumberOfHits;
-	  auto FrameID = mUnion->FrameHeader.FrameID;
-	  auto TRMID = mUnion->FrameHeader.TRMID;
-	  std::cout << boost::format("%08x") % mUnion->Data
-		    << " "
-		    << boost::format("Frame header (TRMID=%d, FrameID=%d, NumberOfHits=%d)") % TRMID % FrameID % NumberOfHits
-		    << std::endl;
+	  auto FrameHeader = reinterpret_cast<FrameHeader_t *>(mPointer);
+	  auto NumberOfHits = FrameHeader->NumberOfHits;
+	  auto FrameID = FrameHeader->FrameID;
+	  auto TRMID = FrameHeader->TRMID;
+	  printf(" %08x Frame header          (TRMID=%d, FrameID=%d, NumberOfHits=%d) \n", *mPointer, TRMID, FrameID, NumberOfHits);
 	}
 #endif
-	mUnion++; nWords++;
+	next32();
 	
 	// packed hits
         for (int ihit = 0; ihit < nPackedHits[iframe]; ++ihit) {
-          mUnion->PackedHit = PackedHit[iframe][ihit];
-#ifdef VERBOSE
+	  *mPointer = PackedHit[iframe][ihit];
+#ifdef ENCODE_VERBOSE
 	  if (mVerbose) {
-            auto Chain = mUnion->PackedHit.Chain;
-            auto TDCID = mUnion->PackedHit.TDCID;
-            auto Channel = mUnion->PackedHit.Channel;
-            auto Time = mUnion->PackedHit.Time;
-            auto TOT = mUnion->PackedHit.TOT;
-            std::cout << boost::format("%08x") % mUnion->Data << " "
-                      << boost::format("Packed hit (Chain=%d, TDCID=%d, "
-                                       "Channel=%d, Time=%d, TOT=%d)") %
-                             Chain % TDCID % Channel % Time % TOT
-                      << std::endl;
+	    auto PackedHit = reinterpret_cast<PackedHit_t *>(mPointer);
+            auto Chain = PackedHit->Chain;
+            auto TDCID = PackedHit->TDCID;
+            auto Channel = PackedHit->Channel;
+            auto Time = PackedHit->Time;
+            auto TOT = PackedHit->TOT;
+            printf(" %08x Packed hit            (Chain=%d, TDCID=%d, Channel=%d, Time=%d, TOT=%d) \n", *mPointer, Chain, TDCID, Channel, Time, TOT);
           }
 #endif
-	  mUnion++; nWords++;
+	  next32();
         }
 
         nPackedHits[iframe] = 0;
@@ -174,31 +223,42 @@ namespace compressed {
     }
 
     // crate trailer
-    mUnion->CrateTrailer = {0x0};
-    mUnion->CrateTrailer.MustBeOne = 1;
-#ifdef VERBOSE
+    *mPointer = 0x80000000 | summary.faultFlags;
+#ifdef ENCODE_VERBOSE
     if (mVerbose) {
-      std::cout << boost::format("%08x") % mUnion->Data
-		<< " "
-		<< "Crate trailer"
-		<< std::endl;
+      auto CrateTrailer = reinterpret_cast<CrateTrailer_t *>(mPointer);
+      auto CrateFault = CrateTrailer->CrateFault;
+      auto TRMFault03 = CrateTrailer->TRMFault03;
+      auto TRMFault04 = CrateTrailer->TRMFault04;
+      auto TRMFault05 = CrateTrailer->TRMFault05;
+      auto TRMFault06 = CrateTrailer->TRMFault06;
+      auto TRMFault07 = CrateTrailer->TRMFault07;
+      auto TRMFault08 = CrateTrailer->TRMFault08;
+      auto TRMFault09 = CrateTrailer->TRMFault09;
+      auto TRMFault10 = CrateTrailer->TRMFault10;
+      auto TRMFault11 = CrateTrailer->TRMFault11;
+      auto TRMFault12 = CrateTrailer->TRMFault12;
+      printf(" %08x Crate trailer         (CrateFault=%d TRMFault[3-12]=0x[%x,%x,%x,%x,%x,%x,%x,%x,%x,%x]) \n", *mPointer,
+	     CrateFault, TRMFault03, TRMFault04, TRMFault05, TRMFault06, TRMFault07, TRMFault08, TRMFault09, TRMFault10, TRMFault11, TRMFault12);
     }
 #endif
-    mUnion++; nWords++;
+    next32();
 
     auto finish = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = finish - start;
 
-    mIntegratedBytes += nWords * 4;
+    mOutputByteCounter += mByteCounter;
+    mIntegratedBytes += mByteCounter;
     mIntegratedTime += elapsed.count();
     
-#ifdef VERBOSE
-    if (mVerbose)
+#ifdef ENCODE_VERBOSE
+    if (mVerbose) {
       std::cout << "-------- END ENCODE EVENT ------------------------------------------"
-		<< " " << nWords << " words"
+		<< " | " << mByteCounter << " bytes"
 		<< " | " << 1.e3  * elapsed.count() << " ms"
 		<< " | " << 1.e-6 * mIntegratedBytes / mIntegratedTime << " MB/s (average)"
 		<< std::endl;
+    }
 #endif
 
     return false;

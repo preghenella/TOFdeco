@@ -5,12 +5,11 @@
 #include <chrono>
 #include "Raw/Decoder.h"
 #include "Raw/Checker.h"
-#include "Compressed/Encoder.h"
 
 int main(int argc, char **argv)
 {
 
-  bool verbose = false, rewind = false;
+  bool verbose = false;
   std::string inFileName, outFileName;
   
   /** define arguments **/
@@ -19,10 +18,7 @@ int main(int argc, char **argv)
   desc.add_options()
     ("help", "Print help messages")
     ("verbose,v", po::bool_switch(&verbose), "Decode verbose")
-    ("rewind,r", po::bool_switch(&rewind), "Rewind on failed check")
     ("input,i", po::value<std::string>(&inFileName), "Input data file")
-    ("output,o", po::value<std::string>(&outFileName), "Output data file")
-    //    ("word,w",  po::value<int>(&wordn)->default_value(2), "Word where to find the data")
     ;
 
   po::variables_map vm;
@@ -43,7 +39,7 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  if (inFileName.empty() || outFileName.empty()) {
+  if (inFileName.empty()) {
     std::cout << desc << std::endl;
     return 1;
   }
@@ -56,11 +52,6 @@ int main(int argc, char **argv)
   tof::data::raw::Checker checker;
   checker.setVerbose(verbose);
   
-  tof::data::compressed::Encoder encoder;
-  encoder.setVerbose(verbose);
-  encoder.init();
-  if (encoder.open(outFileName)) return 1;
-
   /** chrono **/
   std::chrono::time_point<std::chrono::high_resolution_clock> start, finish;
   std::chrono::duration<double> elapsed;
@@ -79,7 +70,7 @@ int main(int argc, char **argv)
     while (!decoder.decode()) {
       
       /** check: if error rewind, print and pause **/
-      if (checker.check(decoder.getSummary()) && rewind) {
+      if (checker.check(decoder.getSummary())) {
 	decoder.rewind();
 	decoder.setVerbose(true);
 	checker.setVerbose(true);
@@ -91,9 +82,6 @@ int main(int argc, char **argv)
 	checker.setVerbose(verbose);
       }
       
-      /** encode **/
-      encoder.encode(decoder.getSummary());
-
     } /** end of decode loop **/
 
     /** pause chrono for IO operation **/
@@ -115,12 +103,8 @@ int main(int argc, char **argv)
     elapsed = finish - start;
     integratedTime += elapsed.count();
     
-    /** flush encoder **/
-    encoder.flush();
-
   } /** end of loop over pages **/
   
-  encoder.close();
   decoder.close();
 
   std::cout << " decoder benchmark: " << decoder.mIntegratedBytes << " bytes in " << decoder.mIntegratedTime << " s"
@@ -131,10 +115,6 @@ int main(int argc, char **argv)
 	    << " | " << 1.e-6 * decoder.mIntegratedBytes / checker.mIntegratedTime << " MB/s"
 	    << std::endl;
   
-  std::cout << " encoder benchmark: " << encoder.mIntegratedBytes << " bytes in " << encoder.mIntegratedTime << " s"
-	    << " | " << 1.e-6 * encoder.mIntegratedBytes / encoder.mIntegratedTime << " MB/s"
-	    << std::endl;
-
   std::cout << " local benchmark: " << integratedTime << " s" << std::endl;
   
   return 0;

@@ -50,6 +50,7 @@ namespace compressed {
 
   struct CrateTrailer_t
   {
+    uint32_t CrateFault   :  1;
     uint32_t TRMFault03   :  3;
     uint32_t TRMFault04   :  3;
     uint32_t TRMFault05   :  3;
@@ -60,7 +61,6 @@ namespace compressed {
     uint32_t TRMFault10   :  3;
     uint32_t TRMFault11   :  3;
     uint32_t TRMFault12   :  3;
-    uint32_t CrateFault   :  1;
     uint32_t MustBeOne    :  1;
   };
 
@@ -74,6 +74,17 @@ namespace compressed {
     CrateOrbit_t   CrateOrbit;
     FrameHeader_t  FrameHeader;
     PackedHit_t    PackedHit;
+    CrateTrailer_t CrateTrailer;
+  };
+
+ /** summary **/
+  struct Summary_t
+  {
+    CrateHeader_t  CrateHeader;
+    CrateOrbit_t   CrateOrbit;
+    uint32_t nHits;
+    FrameHeader_t FrameHeader[1024];
+    PackedHit_t   PackedHit[1024];
     CrateTrailer_t CrateTrailer;
   };
   

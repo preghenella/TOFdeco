@@ -1,12 +1,29 @@
 #include "Decoder.h"
 #include <iostream>
 #include <chrono>
-#include <boost/format.hpp>
 
 namespace tof {
 namespace data {
 namespace raw {
 
+  bool
+  Decoder::init()
+  {
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
+      std::cout << "-------- INITIALISE DECODER BUFFER ---------------------------------"
+		<< " | " << mSize << " bytes"
+		<< std::endl;
+    }
+#endif
+    if (mBuffer) {
+      std::cout << "Warning: a buffer was already allocated, cleaning" << std::endl;
+      delete [] mBuffer;
+    }
+    mBuffer = new char[mSize];
+    return false;
+  }
+  
   bool
   Decoder::open(std::string name)
   {
@@ -40,364 +57,555 @@ namespace raw {
     mSize = mFile.tellg();
     mFile.seekg(0);
     mBuffer = new char[mSize];
-    mUnion = reinterpret_cast<Union_t *>(mBuffer);
     mFile.read(mBuffer, mSize);
     close();
     return false;
   }
-  
-  void
-  Decoder::print(std::string what)
-  {
-    if (mVerbose)
-      std::cout << boost::format("%08x") % mUnion->Data << " " << what << std::endl;
-  }
-  
+
   bool
-  Decoder::next()
+  Decoder::read()
   {
-    /** search for DRM Global header **/
-    while (true) {
-      if (((char *)mUnion - mBuffer) >= mSize)
-	return true;
-      if (mUnion->Word.WordType == 4 && mUnion->Word.SlotID == 1)
-	break;
-      mUnion++;
+    if (!mFile.is_open()) {
+      std::cout << "Warning: no file is open" << std::endl;      
+      return true;
     }
+    mFile.read(mBuffer, mSize);
+    mPointer = (uint32_t *)mBuffer;
+    if (!mFile) {
+      std::cout << "Nothing else to read" << std::endl;
+      return true; 
+    }
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
+      std::cout << "-------- READ CRU PAGE ---------------------------------------------"
+		<< " | " << mSize << " bytes"
+		<< std::endl;
+    }
+#endif
+    mPageCounter++;
     return false;
   }
-
+  
   void
   Decoder::clear()
   {
-    mSummary.DRMGlobalHeader  = {0x0};
-    mSummary.DRMStatusHeader1 = {0x0};
-    mSummary.DRMStatusHeader2 = {0x0};
-    mSummary.DRMStatusHeader3 = {0x0};
-    mSummary.DRMStatusHeader4 = {0x0};
-    //    mSummary.DRMStatusHeader5 = {0x0};
-    mSummary.DRMGlobalTrailer  = {0x0};
+    mSummary.DRMCommonHeader  = 0x0;
+    mSummary.DRMOrbitHeader   = 0x0;
+    mSummary.DRMGlobalHeader  = 0x0;
+    mSummary.DRMStatusHeader1 = 0x0;
+    mSummary.DRMStatusHeader2 = 0x0;
+    mSummary.DRMStatusHeader3 = 0x0;
+    mSummary.DRMStatusHeader4 = 0x0;
+    mSummary.DRMStatusHeader5 = 0x0;
+    mSummary.DRMGlobalTrailer = 0x0;
+    mSummary.faultFlags = 0x0;
     for (int itrm = 0; itrm < 10; itrm++) {
-      mSummary.TRMGlobalHeader[itrm]  = {0x0};
-      mSummary.TRMGlobalTrailer[itrm] = {0x0};
+      mSummary.TRMGlobalHeader[itrm]  = 0x0;
+      mSummary.TRMGlobalTrailer[itrm] = 0x0;
       mSummary.TRMempty[itrm] = true;
-      mSummary.nTRMSpiderHits[itrm] = 0;
       for (int ichain = 0; ichain < 2; ichain++) {
-	mSummary.TRMChainHeader[itrm][ichain]  = {0x0};
-	mSummary.TRMChainTrailer[itrm][ichain] = {0x0};
+	mSummary.TRMChainHeader[itrm][ichain]  = 0x0;
+	mSummary.TRMChainTrailer[itrm][ichain] = 0x0;
 	for (int itdc = 0; itdc < 15; itdc++) {
 	  mSummary.nTDCUnpackedHits[itrm][ichain][itdc] = 0;
 	}}}
+  }
+
+  inline void
+  Decoder::next32()
+  {
+    mPointer += mSkip;
+    mSkip = (mSkip + 2) % 4;
+    mByteCounter += 4;
+  }
+
+  inline void
+  Decoder::next128()
+  {
+    mPointer += 4;
+    mRDH = reinterpret_cast<RDH_t *>(mPointer);
+  }
+  
+  bool
+  Decoder::decodeRDH()
+  {
+    mRDH = reinterpret_cast<RDH_t *>(mPointer);
+
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
+      std::cout << "-------- START DECODE RDH ------------------------------------------"
+		<< " | " << mPageCounter << " pages"
+		<< std::endl;    
+    }
+#endif
+
+    mSummary.RDHWord0 = mRDH->Word0;
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
+      uint32_t BlockLength = mRDH->Word0.BlockLength;
+      uint32_t PacketCounter = mRDH->Word0.PacketCounter;
+      uint32_t HeaderSize = mRDH->Word0.HeaderSize;
+      uint32_t MemorySize = mRDH->Word0.MemorySize;
+      printf(" %08x%08x%08x%08x RDH Word0 (MemorySize=%d, PacketCounter=%d) \n", mRDH->Data[3], mRDH->Data[2], mRDH->Data[1], mRDH->Data[0],
+	     MemorySize, PacketCounter);
+    }
+#endif
+    next128();
+
+    mSummary.RDHWord1 = mRDH->Word1;
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
+      uint32_t TrgOrbit = mRDH->Word1.TrgOrbit;
+      uint32_t HbOrbit = mRDH->Word1.HbOrbit;
+      printf(" %08x%08x%08x%08x RDH Word1 (TrgOrbit=%d, HbOrbit=%d) \n", mRDH->Data[3], mRDH->Data[2], mRDH->Data[1], mRDH->Data[0],
+	     TrgOrbit, HbOrbit);
+    }
+#endif
+    next128();
+
+    mSummary.RDHWord2 = mRDH->Word2;
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
+      uint32_t TrgBC = mRDH->Word2.TrgBC;
+      uint32_t HbBC = mRDH->Word2.HbBC;
+      uint32_t TrgType = mRDH->Word2.TrgType;
+      printf(" %08x%08x%08x%08x RDH Word2 (TrgBC=%d, HbBC=%d, TrgType=%d) \n", mRDH->Data[3], mRDH->Data[2], mRDH->Data[1], mRDH->Data[0],
+	     TrgBC, HbBC, TrgType);
+    }
+#endif
+    next128();
+
+    mSummary.RDHWord3 = mRDH->Word3;
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
+      printf(" %08x%08x%08x%08x RDH Word3 \n", mRDH->Data[3], mRDH->Data[2], mRDH->Data[1], mRDH->Data[0]);
+    }
+#endif
+    next128();
+
+    return false;
   }
   
   bool
   Decoder::decode()
   {
-#ifdef VERBOSE
-    if (mVerbose)
+
+    /** check if we have memory to decode **/
+    if ((char *)mPointer - mBuffer >= mSummary.RDHWord0.MemorySize) {
+#ifdef DECODE_VERBOSE
+      if (mVerbose) {
+	std::cout << "Warning: decode request exceeds memory size" << std::endl;
+      }
+#endif
+      return true;
+    }
+
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
       std::cout << "-------- START DECODE EVENT ----------------------------------------" << std::endl;    
+    }
 #endif
+
+    /** init decoder **/
     auto start = std::chrono::high_resolution_clock::now();
-    
+    mByteCounter = 0;
+    mSkip = 1;
     clear();
-    unsigned int nWords = 1;
     
-    mSummary.DRMGlobalHeader = mUnion->DRMGlobalHeader;
-#ifdef VERBOSE
-    print("DRM Global Header");
+    /** check DRM Common Header **/
+    if (!IS_DRM_COMMON_HEADER(*mPointer)) {
+#ifdef DECODE_VERBOSE
+      printf(" %08x [ERROR] fatal error \n", *mPointer);
 #endif
-    mUnion++; nWords++;
-    mSummary.DRMStatusHeader1 = mUnion->DRMStatusHeader1;
-#ifdef VERBOSE
-    print("DRM Status Header 1");
+      return true;
+    }
+    mSummary.DRMCommonHeader = *mPointer;
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
+      auto DRMCommonHeader = reinterpret_cast<DRMCommonHeader_t *>(mPointer);
+      auto Payload = DRMCommonHeader->Payload;
+      printf(" %08x DRM Common Header     (Payload=%d) \n", *mPointer, Payload);
+    }
 #endif
-    mUnion++; nWords++;
-    mSummary.DRMStatusHeader2 = mUnion->DRMStatusHeader2;
-#ifdef VERBOSE
-    print("DRM Status Header 2");
+    next32();
+
+    /** DRM Orbit Header **/
+    mSummary.DRMOrbitHeader = *mPointer;
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
+      auto DRMOrbitHeader = reinterpret_cast<DRMOrbitHeader_t *>(mPointer);
+      auto Orbit = DRMOrbitHeader->Orbit;
+      printf(" %08x DRM Orbit Header      (Orbit=%d) \n", *mPointer, Orbit);
+    }
 #endif
-    mUnion++; nWords++;
-    mSummary.DRMStatusHeader3 = mUnion->DRMStatusHeader3;
-#ifdef VERBOSE
-    print("DRM Status Header 3");
+    next32();    
+
+    /** check DRM Global Header **/
+    if (!IS_DRM_GLOBAL_HEADER(*mPointer)) {
+#ifdef DECODE_VERBOSE
+      printf(" %08x [ERROR] fatal error \n", *mPointer);
 #endif
-    mUnion++; nWords++;
-    mSummary.DRMStatusHeader4 = mUnion->DRMStatusHeader4;
-#ifdef VERBOSE
-    print("DRM Status Header 4");
+      return true;
+    }
+    mSummary.DRMGlobalHeader = *mPointer;
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
+      auto DRMGlobalHeader = reinterpret_cast<DRMGlobalHeader_t *>(mPointer);
+      auto DRMID = DRMGlobalHeader->DRMID;
+      printf(" %08x DRM Global Header     (DRMID=%d) \n", *mPointer, DRMID);
+    }
 #endif
-    mUnion++; nWords++;
-    //    mSummary.DRMStatusHeader5 = mUnion->DRMStatusHeader5;
-#ifdef VERBOSE
-    print("DRM Status Header 5");
+    next32();
+
+    /** DRM Status Header 1 **/
+    mSummary.DRMStatusHeader1 = *mPointer;
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
+      auto DRMStatusHeader1 = reinterpret_cast<DRMStatusHeader1_t *>(mPointer);
+      auto ParticipatingSlotID = DRMStatusHeader1->ParticipatingSlotID;
+      auto CBit = DRMStatusHeader1->CBit;
+      auto DRMhSize = DRMStatusHeader1->DRMhSize;
+      printf(" %08x DRM Status Header 1   (ParticipatingSlotID=0x%03x, CBit=%d, DRMhSize=%d) \n", *mPointer, ParticipatingSlotID, CBit, DRMhSize);
+    }
 #endif
-    mUnion++; nWords++;
+    next32();
+
+    /** DRM Status Header 2 **/
+    mSummary.DRMStatusHeader2 = *mPointer;
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
+      auto DRMStatusHeader2 = reinterpret_cast<DRMStatusHeader2_t *>(mPointer);
+      auto SlotEnableMask = DRMStatusHeader2->SlotEnableMask;
+      auto FaultID = DRMStatusHeader2->FaultID;
+      auto RTOBit = DRMStatusHeader2->RTOBit;
+      printf(" %08x DRM Status Header 2   (SlotEnableMask=0x%03x, FaultID=%d, RTOBit=%d) \n", *mPointer, SlotEnableMask, FaultID, RTOBit);
+    }
+#endif
+    next32();
+
+    /** DRM Status Header 3 **/
+    mSummary.DRMStatusHeader3 = *mPointer;
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
+      auto DRMStatusHeader3 = reinterpret_cast<DRMStatusHeader3_t *>(mPointer);
+      auto L0BCID = DRMStatusHeader3->L0BCID;
+      auto RunTimeInfo = DRMStatusHeader3->RunTimeInfo;
+      printf(" %08x DRM Status Header 3   (L0BCID=%d, RunTimeInfo=0x%03x) \n", *mPointer, L0BCID, RunTimeInfo);
+    }
+#endif
+    next32();
+
+    /** DRM Status Header 4 **/
+    mSummary.DRMStatusHeader4 = *mPointer;
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
+      printf(" %08x DRM Status Header 4 \n", *mPointer);
+    }
+#endif
+    next32();
+
+    /** DRM Status Header 5 **/
+    mSummary.DRMStatusHeader5 = *mPointer;
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
+      printf(" %08x DRM Status Header 5 \n", *mPointer);
+    }
+#endif
+    next32();
 
     /** loop over DRM payload **/
     while (true) {
 
       /** LTM global header detected **/
-      if (mUnion->Word.WordType == 4 && mUnion->Word.SlotID == 2) {
-
-#ifdef VERBOSE
-	print("LTM Global Header");
+      if (IS_LTM_GLOBAL_HEADER(*mPointer)) {
+	
+#ifdef DECODE_VERBOSE
+	if (mVerbose) {
+	  printf(" %08x LTM Global Header \n", *mPointer);
+	}
 #endif
-	mUnion++; nWords++;
+	next32();
 
 	/** loop over LTM payload **/
 	while (true) {
 
-	  /** TRM global trailer detected **/
-	  if (mUnion->Word.WordType == 5 && mUnion->Word.SlotID == 2) {
-#ifdef VERBOSE
-	    print("LTM Global Trailer");
+	  /** LTM global trailer detected **/
+	  if (IS_LTM_GLOBAL_TRAILER(*mPointer)) {
+#ifdef DECODE_VERBOSE
+	    if (mVerbose) {
+	      printf(" %08x LTM Global Trailer \n", *mPointer);
+	    }
 #endif
-	    mUnion++; nWords++;
+	    next32();
 	    break;
 	  }
 
-#ifdef VERBOSE
-	  print("LTM data");
+#ifdef DECODE_VERBOSE
+	  if (mVerbose) {
+	    printf(" %08x LTM data \n", *mPointer);
+	  }
 #endif
-	  mUnion++; nWords++;
+	  next32();
 	}
 	
       }
       
       /** TRM global header detected **/
-      if (mUnion->Word.WordType == 4 && mUnion->Word.SlotID > 2) {
-	int islot = mUnion->Word.SlotID;
-	int itrm = islot - 3;
-	mSummary.TRMGlobalHeader[itrm] = mUnion->TRMGlobalHeader;
-#ifdef VERBOSE
-	print("TRM Global Header");
+      if (IS_TRM_GLOBAL_HEADER(*mPointer) && GET_TRM_SLOTID(*mPointer) > 2) {
+	uint32_t SlotID = GET_TRM_SLOTID(*mPointer);
+	int itrm = SlotID - 3;
+	mSummary.TRMGlobalHeader[itrm] = *mPointer;
+#ifdef DECODE_VERBOSE
+	if (mVerbose) {
+	  auto TRMGlobalHeader = reinterpret_cast<TRMGlobalHeader_t *>(mPointer);
+	  auto EventWords = TRMGlobalHeader->EventWords;
+	  auto EventNumber = TRMGlobalHeader->EventNumber;
+	  auto EBit = TRMGlobalHeader->EBit;
+	  printf(" %08x TRM Global Header     (SlotID=%d, EventWords=%d, EventNumber=%d, EBit=%01x) \n", *mPointer, SlotID, EventWords, EventNumber, EBit);
+	}
 #endif
-	mUnion++; nWords++;
+	next32();
 	
 	/** loop over TRM payload **/
 	while (true) {
 
 	  /** TRM chain-A header detected **/
-	  if (mUnion->Word.WordType == 0 && mUnion->Word.SlotID == islot) {
+	  if (IS_TRM_CHAINA_HEADER(*mPointer) && GET_TRM_SLOTID(*mPointer) == SlotID) {
 	    int ichain = 0;
-	    mSummary.TRMChainHeader[itrm][ichain] = mUnion->TRMChainHeader;
-#ifdef VERBOSE
-	    print("TRM Chain-A Header");
+	    mSummary.TRMChainHeader[itrm][ichain] = *mPointer;
+#ifdef DECODE_VERBOSE
+	    if (mVerbose) {
+	      auto TRMChainHeader = reinterpret_cast<TRMChainHeader_t *>(mPointer);
+	      auto BunchID = TRMChainHeader->BunchID;
+	      printf(" %08x TRM Chain-A Header    (SlotID=%d, BunchID=%d) \n", *mPointer, SlotID, BunchID);
+	    }
 #endif
-	    mUnion++; nWords++;
+	    next32();
 
 	    /** loop over TRM chain-A payload **/
 	    while (true) {
-
+	      
 	      /** TDC hit detected **/
-	      if (mUnion->Word.WordType & 0x8) {
+	      if (IS_TDC_HIT(*mPointer)) {
                 mSummary.TRMempty[itrm] = false;
-                int itdc = mUnion->TDCUnpackedHit.TDCID;
-		int ihit = mSummary.nTDCUnpackedHits[itrm][ichain][itdc];
-		mSummary.TDCUnpackedHit[itrm][ichain][itdc][ihit] = mUnion->TDCUnpackedHit;
+                auto itdc = GET_TDCHIT_TDCID(*mPointer);
+		auto ihit = mSummary.nTDCUnpackedHits[itrm][ichain][itdc];
+		mSummary.TDCUnpackedHit[itrm][ichain][itdc][ihit] = *mPointer;
 		mSummary.nTDCUnpackedHits[itrm][ichain][itdc]++;
-#ifdef VERBOSE
-		print("TDC hit");
+#ifdef DECODE_VERBOSE
+		if (mVerbose) {
+		  auto TDCUnpackedHit = reinterpret_cast<TDCUnpackedHit_t *>(mPointer);
+		  auto HitTime = TDCUnpackedHit->HitTime;
+		  auto Chan = TDCUnpackedHit->Chan;
+		  auto TDCID = TDCUnpackedHit->TDCID;
+		  auto EBit = TDCUnpackedHit->EBit;
+		  auto PSBits = TDCUnpackedHit->PSBits;
+		  printf(" %08x TDC Hit               (HitTime=%d, Chan=%d, TDCID=%d, EBit=%d, PSBits=%d \n", *mPointer, HitTime, Chan, TDCID, EBit, PSBits);
+		}
 #endif
-		mUnion++; nWords++;
+		next32();
 		continue;
 	      }
 	      
 	      /** TDC error detected **/
-	      if (mUnion->Word.WordType == 6) {
-#ifdef VERBOSE
-		print("TDC error");
+	      if (IS_TDC_ERROR(*mPointer)) {
+#ifdef DECODE_VERBOSE
+		if (mVerbose) {
+		  printf(" %08x TDC error \n", *mPointer);
+		}
 #endif
-		mUnion++; nWords++;
+		next32();
 		continue;
 	      }
-
+	      
 	      /** TRM chain-A trailer detected **/
-	      if (mUnion->Word.WordType == 1) {
-		mSummary.TRMChainTrailer[itrm][ichain] = mUnion->TRMChainTrailer;
-#ifdef VERBOSE
-		print("TRM Chain-A Trailer");
+	      if (IS_TRM_CHAINA_TRAILER(*mPointer)) {
+		mSummary.TRMChainTrailer[itrm][ichain] = *mPointer;
+#ifdef DECODE_VERBOSE
+		if (mVerbose) {
+		  auto TRMChainTrailer = reinterpret_cast<TRMChainTrailer_t *>(mPointer);
+		  auto EventCounter = TRMChainTrailer->EventCounter;
+		  printf(" %08x TRM Chain-A Trailer   (SlotID=%d, EventCounter=%d) \n", *mPointer, SlotID, EventCounter);
+		}
 #endif
-		mUnion++; nWords++;
+		next32();
 		break;
 	      }
-		
-#ifdef VERBOSE
-	      print("[ERROR] breaking TRM Chain-A decode stream");
+	      
+#ifdef DECODE_VERBOSE
+	      if (mVerbose) {
+		printf(" %08x [ERROR] breaking TRM Chain-A decode stream \n", *mPointer);
+	      }
 #endif
-	      mUnion++; nWords++;
+	      next32();
 	      break;
 	      
 	    }} /** end of loop over TRM chain-A payload **/	    
 	  
 	  /** TRM chain-B header detected **/
-	  if (mUnion->Word.WordType == 2 && mUnion->Word.SlotID == islot) {
+	  if (IS_TRM_CHAINB_HEADER(*mPointer) && GET_TRM_SLOTID(*mPointer) == SlotID) {
 	    int ichain = 1;
-	    mSummary.TRMChainHeader[itrm][ichain] = mUnion->TRMChainHeader;
-#ifdef VERBOSE
-	    print("TRM Chain-B Header");
+	    mSummary.TRMChainHeader[itrm][ichain] = *mPointer;
+#ifdef DECODE_VERBOSE
+	    if (mVerbose) {
+	      auto TRMChainHeader = reinterpret_cast<TRMChainHeader_t *>(mPointer);
+	      auto BunchID = TRMChainHeader->BunchID;
+	      printf(" %08x TRM Chain-B Header    (SlotID=%d, BunchID=%d) \n", *mPointer, SlotID, BunchID);
+	    }
 #endif
-	    mUnion++; nWords++;
-
+	    next32();
+	    
 	    /** loop over TRM chain-B payload **/
 	    while (true) {
-
+	      
 	      /** TDC hit detected **/
-	      if (mUnion->Word.WordType & 0x8) {
+	      if (IS_TDC_HIT(*mPointer)) {
                 mSummary.TRMempty[itrm] = false;
-                int itdc = mUnion->TDCUnpackedHit.TDCID;
-		int ihit = mSummary.nTDCUnpackedHits[itrm][ichain][itdc];
-		mSummary.TDCUnpackedHit[itrm][ichain][itdc][ihit] = mUnion->TDCUnpackedHit;
+                auto itdc = GET_TDCHIT_TDCID(*mPointer);
+		auto ihit = mSummary.nTDCUnpackedHits[itrm][ichain][itdc];
+		mSummary.TDCUnpackedHit[itrm][ichain][itdc][ihit] = *mPointer;
 		mSummary.nTDCUnpackedHits[itrm][ichain][itdc]++;
-#ifdef VERBOSE
-		print("TDC hit");
+#ifdef DECODE_VERBOSE
+		if (mVerbose) {
+		  auto TDCUnpackedHit = reinterpret_cast<TDCUnpackedHit_t *>(mPointer);
+		  auto HitTime = TDCUnpackedHit->HitTime;
+		  auto Chan = TDCUnpackedHit->Chan;
+		  auto TDCID = TDCUnpackedHit->TDCID;
+		  auto EBit = TDCUnpackedHit->EBit;
+		  auto PSBits = TDCUnpackedHit->PSBits;
+		  printf(" %08x TDC Hit               (HitTime=%d, Chan=%d, TDCID=%d, EBit=%d, PSBits=%d \n", *mPointer, HitTime, Chan, TDCID, EBit, PSBits);
+		}
 #endif
-		mUnion++; nWords++;
+		next32();
 		continue;
 	      }
 	      
 	      /** TDC error detected **/
-	      if (mUnion->Word.WordType == 6) {
-#ifdef VERBOSE
-		print("TDC error");
+	      if (IS_TDC_ERROR(*mPointer)) {
+#ifdef DECODE_VERBOSE
+		if (mVerbose) {
+		  printf(" %08x TDC error \n", *mPointer);
+		}
 #endif
-		mUnion++; nWords++;
+		next32();
 		continue;
 	      }
-
+	      
 	      /** TRM chain-B trailer detected **/
-	      if (mUnion->Word.WordType == 3) {
-		mSummary.TRMChainTrailer[itrm][ichain] = mUnion->TRMChainTrailer;
-#ifdef VERBOSE
-		print("TRM Chain-B Trailer");
+	      if (IS_TRM_CHAINB_TRAILER(*mPointer)) {
+		mSummary.TRMChainTrailer[itrm][ichain] = *mPointer;
+#ifdef DECODE_VERBOSE
+		if (mVerbose) {
+		  auto TRMChainTrailer = reinterpret_cast<TRMChainTrailer_t *>(mPointer);
+		  auto EventCounter = TRMChainTrailer->EventCounter;
+		  printf(" %08x TRM Chain-B Trailer   (SlotID=%d, EventCounter=%d) \n", *mPointer, SlotID, EventCounter);
+		}
 #endif
-		mUnion++; nWords++;
+		next32();
 		break;
 	      }
-		
-#ifdef VERBOSE
-	      print("[ERROR] breaking TRM Chain-B decode stream");
+	      
+#ifdef DECODE_VERBOSE
+	      if (mVerbose) {
+		printf(" %08x [ERROR] breaking TRM Chain-B decode stream \n", *mPointer);
+	      }
 #endif
-	      mUnion++; nWords++;
+	      next32();
 	      break;
 	      
 	    }} /** end of loop over TRM chain-A payload **/	    
 	  
 	  /** TRM global trailer detected **/
-	  if (mUnion->Word.WordType == 5 && mUnion->Word.SlotID == 0xf) {
-	    mSummary.TRMGlobalTrailer[itrm] = mUnion->TRMGlobalTrailer;
-#ifdef VERBOSE
-	    print("TRM Global Trailer");
+	  if (IS_TRM_GLOBAL_TRAILER(*mPointer)) {
+	    mSummary.TRMGlobalTrailer[itrm] = *mPointer;
+#ifdef DECODE_VERBOSE
+	    if (mVerbose) {
+	      auto TRMGlobalTrailer = reinterpret_cast<TRMGlobalTrailer_t *>(mPointer);
+	      auto EventCRC = TRMGlobalTrailer->EventCRC;
+	      auto LBit = TRMGlobalTrailer->LBit;
+	      printf(" %08x TRM Global Trailer    (SlotID=%d, EventCRC=%d, LBit=%d) \n", *mPointer, SlotID, EventCRC, LBit);
+	    }
 #endif
-	    mUnion++; nWords++;
+	    next32();
 	    
-	    /** filler detected **/
-	    if (mUnion->Word.WordType == 7) {
-#ifdef VERBOSE
-	      print("Filler");
+ 	    /** filler detected **/
+	    if (IS_FILLER(*mPointer)) {
+#ifdef DECODE_VERBOSE
+	      if (mVerbose) {
+		printf(" %08x Filler \n", *mPointer);
+	      }
 #endif
-	      mUnion++; nWords++;
+	      next32();
 	    }
 	    
 	    break;
 	  }
 	  
-#ifdef VERBOSE
-	  print("[ERROR] breaking TRM decode stream");
+#ifdef DECODE_VERBOSE
+	  if (mVerbose) {
+	    printf(" %08x [ERROR] breaking TRM decode stream \n", *mPointer);
+	  }
 #endif
-	  mUnion++; nWords++;
+	  next32();
 	  break;
 	  
 	} /** end of loop over TRM payload **/
-
+	
 	continue;
       }
-	
+      
       /** DRM global trailer detected **/
-      if (mUnion->Word.WordType == 5 && mUnion->Word.SlotID == 1) {
-	mSummary.DRMGlobalTrailer = mUnion->DRMGlobalTrailer;
-#ifdef VERBOSE
-	print("DRM Global Trailer");
+      if (IS_DRM_GLOBAL_TRAILER(*mPointer)) {
+	mSummary.DRMGlobalTrailer = *mPointer;
+#ifdef DECODE_VERBOSE
+	if (mVerbose) {
+	  auto DRMGlobalTrailer = reinterpret_cast<DRMGlobalTrailer_t *>(mPointer);
+	  auto LocalEventCounter = DRMGlobalTrailer->LocalEventCounter;
+	  printf(" %08x DRM Global Trailer    (LocalEventCounter=%d) \n", *mPointer, LocalEventCounter);
+	}
 #endif
+	next32();
+	
+	/** filler detected **/
+	if (IS_FILLER(*mPointer)) {
+#ifdef DECODE_VERBOSE
+	  if (mVerbose) {
+	    printf(" %08x Filler \n", *mPointer);
+	  }
+#endif
+	  next32();
+	}
+	
 	break;
       }
       
-#ifdef VERBOSE
-      print("[ERROR] trying to recover DRM decode stream");
+#ifdef DECODE_VERBOSE
+      if (mVerbose) {
+	printf(" %08x [ERROR] trying to recover DRM decode stream \n", *mPointer);
+      }
 #endif
-      mUnion++; nWords++;
+      next32();
       
     } /** end of loop over DRM payload **/
-
+    
     auto finish = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = finish - start;
-
-    mIntegratedBytes += nWords * 4;
+    
+    mIntegratedBytes += mByteCounter;
     mIntegratedTime += elapsed.count();
     
-#ifdef VERBOSE
-    if (mVerbose)
+#ifdef DECODE_VERBOSE
+    if (mVerbose) {
       std::cout << "-------- END DECODE EVENT ------------------------------------------"
-		<< " | " << nWords << " words"
+		<< " | " << mByteCounter << " bytes"
 		<< " | " << 1.e3  * elapsed.count() << " ms"
 		<< " | " << 1.e-6 * mIntegratedBytes / mIntegratedTime << " MB/s (average)"
 		<< std::endl;
+    }
 #endif
 
-    spider();
     return false;
   }
 
-  void
-  Decoder::spider()
-  {
-
-    /** loop over TRMs **/
-    for (int itrm = 0; itrm < 10; itrm++) {
-
-      /** check if TRM is empty **/
-      if (mSummary.TRMempty[itrm])
-	continue;
-
-      /** loop over TRM chains **/
-      for (int ichain = 0; ichain < 2; ++ichain) {
-	
-	/** loop over TDCs **/
-	for (int itdc = 0; itdc < 15; ++itdc) {
-	  
-          auto nhits = mSummary.nTDCUnpackedHits[itrm][ichain][itdc];
-          if (nhits == 0)
-            continue;
-
-          /** loop over hits **/
-          for (int ihit = 0; ihit < nhits; ++ihit) {
-
-            auto lhit = mSummary.TDCUnpackedHit[itrm][ichain][itdc][ihit];
-            if (lhit.PSBits != 0x1)
-              continue; // must be a leading hit
-            auto tot = 0;
-	    
-            // check next hits for packing
-            for (int jhit = ihit + 1; jhit < nhits; ++jhit) {
-              auto thit = mSummary.TDCUnpackedHit[itrm][ichain][itdc][jhit];
-              if (thit.PSBits == 0x2 && thit.Chan == lhit.Chan) { // must be a trailing hit from same channel
-                tot = thit.HitTime - lhit.HitTime; // compute TOT
-                lhit.PSBits = 0x0;                 // mark as used
-                break;
-              }
-            }
-
-	    auto phit = mSummary.nTRMSpiderHits[itrm];
-            mSummary.TRMSpiderHit[itrm][phit].Chain = ichain;
-            mSummary.TRMSpiderHit[itrm][phit].TDCID = itdc;
-            mSummary.TRMSpiderHit[itrm][phit].Chan = lhit.Chan;
-            mSummary.TRMSpiderHit[itrm][phit].HitTime = lhit.HitTime;
-            mSummary.TRMSpiderHit[itrm][phit].TOTWidth = tot;
-            mSummary.TRMSpiderHit[itrm][phit].EBit = lhit.EBit;
-            mSummary.nTRMSpiderHits[itrm]++;
-	    
-	  }}}}
-  }
-  
 }}}
 
