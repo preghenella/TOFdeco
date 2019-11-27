@@ -122,7 +122,8 @@ int main(int argc, char **argv)
   
   encoder.close();
   decoder.close();
-
+  checker.print();
+  
   std::cout << " decoder benchmark: " << decoder.mIntegratedBytes << " bytes in " << decoder.mIntegratedTime << " s"
 	    << " | " << 1.e-6 * decoder.mIntegratedBytes / decoder.mIntegratedTime << " MB/s"
 	    << std::endl;

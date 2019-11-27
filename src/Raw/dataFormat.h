@@ -24,15 +24,20 @@
 #define IS_TDC_HIT(x)                  ( (x & 0x80000000) == 0x80000000 )
 
 
-#define GET_DRM_DRMID(x)               ( (x & 0x0FE00000) >> 21 )
-#define GET_DRM_PARTICIPATINGSLOTID(x) ( (x & 0x00007FF0) >>  4 )
-#define GET_DRM_SLOTENABLEMASK(x)      ( (x & 0x00007FF0) >>  4 )
-#define GET_DRM_L0BCID(x)              ( (x & 0x0000FFF0) >>  4 )
-#define GET_DRM_LOCALEVENTCOUNTER(x)   ( (x & 0x0000FFF0) >>  4 )
+#define GET_DRM_DRMID(x)                 ( (x & 0x0FE00000) >> 21 )
+#define GET_DRM_PARTICIPATINGSLOTID(x)   ( (x & 0x00007FF0) >>  4 )
+#define GET_DRM_SLOTENABLEMASK(x)        ( (x & 0x00007FF0) >>  4 )
+#define GET_DRM_L0BCID(x)                ( (x & 0x0000FFF0) >>  4 )
+#define GET_DRM_LOCALEVENTCOUNTER(x)     ( (x & 0x0000FFF0) >>  4 )
+
+#define GET_DRMSTATUSHEADER1_CBIT(x)     ( (x & 0x00008000) >>  15 )
+#define GET_DRMSTATUSHEADER2_FAULTID(x)  ( (x & 0x07FF0000) >>  16 )
+#define GET_DRMSTATUSHEADER2_RTOBIT(x)   ( (x & 0x08000000) >>  27 )
 
 #define GET_TRM_SLOTID(x)              ( (x & 0x0000000F) )
 #define GET_TRM_EVENTNUMBER(x)         ( (x & 0x07FE0000) >> 17 )
 #define GET_TRM_EVENTWORDS(x)          ( (x & 0x0001FFF0) >>  4 )
+#define GET_TRMGLOBALHEADER_EBIT(x)    ( (x & 0x08000000) >>  27 )
 
 #define GET_TRMCHAIN_BUNCHID(x)        ( (x & 0x0000FFF0) >>  4 )
 #define GET_TRMCHAIN_EVENTCOUNTER(x)   ( (x & 0x0FFF0000) >> 16 )
@@ -286,35 +291,40 @@ namespace raw {
     uint8_t  nTDCUnpackedHits[10][2][15];
     // derived data
     bool TRMempty[10];
+    bool TDCerror[10][2];
     // status
     bool decodeError;
     uint32_t faultFlags;
   };
 
       
-  /** counter data **/
+  /** counters **/
   
-  struct TRMChainCounterData_t
+  struct DRMCounters_t
+  {
+    uint32_t Headers;
+    uint32_t EventWordsMismatch;
+    uint32_t CBit;
+    uint32_t Fault;
+    uint32_t RTOBit;
+  };
+
+  struct TRMCounters_t
+  {
+    uint32_t Headers;
+    uint32_t Empty;
+    uint32_t EventCounterMismatch;
+    uint32_t EventWordsMismatch;
+    uint32_t EBit;
+  };
+  
+  struct TRMChainCounters_t
   { 
-    uint32_t ExpectedData;
-    uint32_t DetectedData;
+    uint32_t Headers;
     uint32_t EventCounterMismatch;
     uint32_t BadStatus;
-  };
-  
-  struct TRMCounterData_t
-  {
-    uint32_t ExpectedData;
-    uint32_t DetectedData;
-    uint32_t EventWordsMismatch;
-    uint32_t EventCounterMismatch;
-  };
-  
-  struct DRMCounterData_t
-  {
-    uint32_t ExpectedData;
-    uint32_t DetectedData;
-    uint32_t EventWordsMismatch;
+    uint32_t BunchIDMismatch;
+    uint32_t TDCerror;
   };
   
 }}}

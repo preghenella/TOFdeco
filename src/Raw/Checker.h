@@ -17,6 +17,8 @@ namespace raw {
     Checker() {};
     ~Checker() {};
 
+    bool reset();
+    bool print();
     bool check(tof::data::raw::Summary_t &summary);
     void setVerbose(bool val) {mVerbose = val;};
 
@@ -26,6 +28,12 @@ namespace raw {
   protected:
 
     bool mVerbose = false;
+
+    // counters
+    uint32_t           mCounter;
+    DRMCounters_t      mDRMCounters;
+    TRMCounters_t      mTRMCounters[10];
+    TRMChainCounters_t mTRMChainCounters[10][2];
     
   };
   

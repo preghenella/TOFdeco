@@ -106,6 +106,7 @@ namespace raw {
       for (int ichain = 0; ichain < 2; ichain++) {
 	mSummary.TRMChainHeader[itrm][ichain]  = 0x0;
 	mSummary.TRMChainTrailer[itrm][ichain] = 0x0;
+	mSummary.TDCerror[itrm][ichain] = false;
 	for (int itdc = 0; itdc < 15; itdc++) {
 	  mSummary.nTDCUnpackedHits[itrm][ichain][itdc] = 0;
 	}}}
@@ -409,6 +410,7 @@ namespace raw {
 	      
 	      /** TDC error detected **/
 	      if (IS_TDC_ERROR(*mPointer)) {
+		mSummary.TDCerror[itrm][ichain] = true;
 #ifdef DECODE_VERBOSE
 		if (mVerbose) {
 		  printf(" %08x TDC error \n", *mPointer);
@@ -482,6 +484,7 @@ namespace raw {
 	      
 	      /** TDC error detected **/
 	      if (IS_TDC_ERROR(*mPointer)) {
+		mSummary.TDCerror[itrm][ichain] = true;
 #ifdef DECODE_VERBOSE
 		if (mVerbose) {
 		  printf(" %08x TDC error \n", *mPointer);
