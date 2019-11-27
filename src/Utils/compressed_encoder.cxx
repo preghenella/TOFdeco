@@ -12,6 +12,7 @@ int main(int argc, char **argv)
 
   bool verbose = false, rewind = false;
   std::string inFileName, outFileName;
+  int drmid = -1;
   
   /** define arguments **/
   namespace po = boost::program_options;
@@ -22,7 +23,7 @@ int main(int argc, char **argv)
     ("rewind,r", po::bool_switch(&rewind), "Rewind on failed check")
     ("input,i", po::value<std::string>(&inFileName), "Input data file")
     ("output,o", po::value<std::string>(&outFileName), "Output data file")
-    //    ("word,w",  po::value<int>(&wordn)->default_value(2), "Word where to find the data")
+    ("drm",  po::value<int>(&drmid), "Select DRM")
     ;
 
   po::variables_map vm;
@@ -50,6 +51,7 @@ int main(int argc, char **argv)
   
   tof::data::raw::Decoder decoder;
   decoder.setVerbose(verbose);
+  decoder.setDRM(drmid);
   decoder.init();
   if (decoder.open(inFileName)) return 1;
 

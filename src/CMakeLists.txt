@@ -10,6 +10,10 @@ if (ENABLE_ENCODE_VERBOSE OR ENABLE_VERBOSE)
    add_definitions(-DENCODE_VERBOSE)
 endif()
 
+if (ALLOW_DRMID)
+   add_definitions(-DALLOW_DRMID)
+endif()
+
 add_subdirectory(Raw)
 add_subdirectory(Compressed)
 add_subdirectory(Utils)

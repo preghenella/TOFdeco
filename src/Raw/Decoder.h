@@ -29,6 +29,7 @@ namespace raw {
     void setVerbose(bool val) {mVerbose = val;};
     void setSkip(int val) {mSkip = val;};
     void setSize(long val) {mSize = val;};
+    void setDRM(int val) {mDRM = val;};
     Summary_t &getSummary() {return mSummary;};
 
     // benchmarks
@@ -54,7 +55,8 @@ namespace raw {
     uint32_t mWordType;
     RDH_t *mRDH;
     Summary_t mSummary;    
-
+    uint32_t mDRM = -1;
+    
     uint32_t mPageCounter = 0;
     uint32_t mByteCounter = 0;
     

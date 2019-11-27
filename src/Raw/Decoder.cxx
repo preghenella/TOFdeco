@@ -256,6 +256,10 @@ namespace raw {
       printf(" %08x DRM Global Header     (DRMID=%d) \n", *mPointer, DRMID);
     }
 #endif
+#ifdef ALLOW_DRMID
+    if (mDRM != -1 && GET_DRM_DRMID(*mPointer) != mDRM)
+      return true;
+#endif
     next32();
 
     /** DRM Status Header 1 **/
